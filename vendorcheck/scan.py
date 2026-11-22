@@ -13,16 +13,18 @@ import csv
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import threading
 import time
 import unicodedata
 
-from . import ap, store
+from . import ap, bill, store
 from .config import CONFIG
 
 HERE = os.path.dirname(__file__)
@@ -37,6 +39,10 @@ _compile_lock = threading.Lock()
 _SIGNS = "".join(c for c in map(chr, range(0x20, 0x20D0)) if unicodedata.category(c) == "Sc" and c != "₹")
 RUPEE_MISREAD = re.compile("[" + re.escape(_SIGNS) + r"](?=\s?\d)")
 # ...or as a bare letter R glued to an Indian-grouped amount (R1,58,400.00); the grouping keeps codes like R123 untouched
+# ...or as a stray mark (· * ' etc.) between a space and an Indian-grouped amount
+RUPEE_AS_MARK = re.compile(r"(?<=\s)[^\w\s,.₹](?=\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?\b)")
+# a label's colon read as a semicolon ("Qty; 120"): glued to a word and followed by a space
+COLON_AS_SEMI = re.compile(r"(?<=[A-Za-z.]);(?=\s)")
 RUPEE_AS_R = re.compile(r"(?<![A-Za-z0-9])R(?=\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?\b)")
 
 
@@ -100,8 +106,10 @@ def _apple_bin():
 
 
 def _apple(path):
+    """Lines read by Apple Vision, and the image size in pixels (for taking out the page's tilt)."""
     r = subprocess.run([_apple_bin(), path], capture_output=True, text=True, timeout=180, check=True)
-    return json.loads(r.stdout)
+    out = json.loads(r.stdout)
+    return (out["lines"], out.get("size")) if isinstance(out, dict) else (out, None)
 
 
 def _tesseract(path):
@@ -128,7 +136,8 @@ def read_image(path):
     last = None
     for name in dict.fromkeys(order):
         try:
-            return {"reader": name, "lines": _apple(path) if name == "apple_vision" else _tesseract(path)}
+            lines, size = _apple(path) if name == "apple_vision" else (_tesseract(path), None)
+            return {"reader": name, "lines": lines, "size": size}
         except (OSError, subprocess.SubprocessError, ValueError) as e:
             last = e
             store.log(None, f"scan: {name} could not read {os.path.basename(path)}: {e}", "warn")
@@ -146,30 +155,99 @@ def warm():
 
 # ---------------- lines -> rows ----------------
 
-def rows_from_lines(lines):
+def _tilt(lines, W, H):
+    """The page's tilt in radians: median slope of the long lines' top edges, in pixels."""
+    angles = []
+    for ln in lines:
+        q = ln.get("quad")
+        if q and abs(q[2] - q[0]) > 0.15:
+            angles.append(math.atan2((q[3] - q[1]) * H, (q[2] - q[0]) * W))
+    return statistics.median(angles) if angles else 0.0
+
+
+def rows_from_lines(lines, size=None):
     """Group the pieces read on one printed line (a label and its value are often read apart),
-    left to right, joined by two spaces so the extractor can tell columns apart."""
+    left to right, joined by two spaces so the extractor can tell columns apart.
+
+    With the image size and the reader's corner points, the page's tilt is taken out first, so a
+    hand-held photo does not mix a value with the next line's label. Without them (Tesseract, tests),
+    rows are grouped on the boxes as read."""
+    W, H = size or (1, 1)
+    a = _tilt(lines, W, H) if size else 0.0
+    ca, sa = math.cos(-a), math.sin(-a)
+    placed = []
+    for ln in lines:
+        x, y, w, h = ln["box"]
+        cx, cy = (x + w / 2) * W, (y + h / 2) * H
+        q = ln.get("quad")
+        lh = math.hypot((q[6] - q[0]) * W, (q[7] - q[1]) * H) if (size and q) else h * H
+        placed.append((cx * sa + cy * ca, cx * ca - cy * sa, lh, ln))   # (y, x) after taking out the tilt
+    # straightened: label and value share a height; the next printed line is 1.2+ heights away.
+    # as read (no tilt known): allow 0.75 of a line, since a slight tilt puts a value up to ~70% lower
+    k = 0.6 if a else 0.75
     rows = []
-    for ln in sorted(lines, key=lambda l: l["box"][1] + l["box"][3] / 2):
-        cy, h = ln["box"][1] + ln["box"][3] / 2, ln["box"][3]
-        # 0.75 of a line height: a tilted photo puts a value up to ~70% of a line below its label; the next printed line is 1.2+ heights away
-        if rows and abs(cy - rows[-1]["cy"]) < 0.75 * min(h, rows[-1]["h"]):
+    for ry, rx, lh, ln in sorted(placed, key=lambda t: t[0]):
+        if rows and abs(ry - rows[-1]["cy"]) < k * min(lh, rows[-1]["h"]):
             r = rows[-1]
-            r["items"].append(ln)
-            r["cy"] = sum(i["box"][1] + i["box"][3] / 2 for i in r["items"]) / len(r["items"])
+            r["items"].append((rx, ln))
+            r["ys"].append(ry)
+            r["cy"] = sum(r["ys"]) / len(r["ys"])
         else:
-            rows.append({"cy": cy, "h": h, "items": [ln]})
+            rows.append({"cy": ry, "h": lh, "ys": [ry], "items": [(rx, ln)]})
     out = []
     for r in rows:
-        items = sorted(r["items"], key=lambda l: l["box"][0])
+        items = [ln for _, ln in sorted(r["items"], key=lambda t: t[0])]
         text = "  ".join(i["text"].strip() for i in items)
-        out.append({"text": RUPEE_AS_R.sub("₹", RUPEE_MISREAD.sub("₹", text)), "conf": min(i["conf"] for i in items),
-                    "boxes": [i["box"] for i in items]})
+        text = RUPEE_AS_R.sub("₹", RUPEE_AS_MARK.sub("₹", RUPEE_MISREAD.sub("₹", text)))
+        text = COLON_AS_SEMI.sub(":", text)
+        out.append({"text": text, "conf": min(i["conf"] for i in items), "boxes": [i["box"] for i in items]})
     return out
 
 
+TITLES = {"tax_invoice": "TAX INVOICE", "invoice": "TAX INVOICE", "bill_of_supply": "BILL OF SUPPLY", "credit_note": "CREDIT NOTE",
+          "debit_note": "DEBIT NOTE", "proforma": "PROFORMA", "quotation": "QUOTATION", "delivery_challan": "DELIVERY CHALLAN",
+          "receipt": "RECEIPT", "unknown": "DOCUMENT"}
+# inbox field <- bill field
+FROM_BILL = {"vendor_name_text": "seller.name", "gstin": "seller.gstin", "invoice_no": "invoice_no", "invoice_date": "invoice_date",
+             "po_no": "po_no", "qty": "qty", "amount_inr": "total", "account_no": "bank.account_no", "ifsc": "bank.ifsc",
+             "account_name": "bank.account_holder"}
+
+
 def _text(rec):
-    return f"Scanned-From: {rec['photo']}\n" + "\n".join(r["text"] for r in rec["rows"]) + "\n"
+    """The inbox document for a scan: written from the bill read off the photo, one labelled line per field, so the
+    invoice checks read exactly what was confirmed (and nothing from stray text such as a browser bar in the photo)."""
+    b = rec.get("bill")
+    if not b:
+        return f"Scanned-From: {rec['photo']}\n" + "\n".join(r["text"] for r in rec["rows"]) + "\n"
+    F = b["fields"]
+
+    def v(k):
+        f = F.get(k)
+        return f["value"] if f and f["value"] not in (None, "") else None
+    payable = b["doc_type"] in ("tax_invoice", "invoice", "bill_of_supply", "unknown")
+    out = [f"Scanned-From: {rec['photo']}", TITLES.get(b["doc_type"], "DOCUMENT")]
+    if v("seller.name"):
+        out.append(f"Vendor: {v('seller.name')}")
+    if v("seller.gstin"):
+        out.append(f"GSTIN: {v('seller.gstin')}")
+    if v("invoice_no"):
+        out.append(f"{'Invoice No' if payable else 'Document No.'}: {v('invoice_no')}")
+    if v("invoice_date"):
+        out.append(f"Invoice Date: {bill.show_date(v('invoice_date'))}")
+    if v("po_no"):
+        out.append(f"PO No: {v('po_no')}")
+    first = next((i["description"] for i in b.get("items", []) if i.get("description")), None)
+    if first:
+        out.append(f"Description: {first}")
+    if v("qty") is not None:
+        out.append(f"Qty: {v('qty'):g}")
+    if v("total") is not None:
+        out.append(f"Total Amount Payable: INR {bill.inr(v('total'))}")
+    if v("bank.account_no"):
+        out.append(f"Account No: {v('bank.account_no')}" + (f"  IFSC: {v('bank.ifsc')}" if v("bank.ifsc") else ""))
+    if v("bank.account_holder"):
+        out.append(f"Account Name: {v('bank.account_holder')}")
+    return "\n".join(out) + "\n"
 
 
 # ---------------- citations (used by ap.process_file) ----------------
@@ -205,25 +283,45 @@ def attach(path, text, x):
     if rec.get("text_sha") != _sha(text.encode()):
         return
     fields = {}
-    for f in FIELDS:
-        if x.get(f) is not None:
-            i = _row_for(f, x[f], rec["rows"])
-            if i is not None:
-                r = rec["rows"][i]
-                fields[f] = {"row": i + 1, "text": r["text"], "conf": r["conf"], "boxes": r["boxes"]}
+    if rec.get("bill"):
+        for xk, bk in FROM_BILL.items():
+            f = rec["bill"]["fields"].get(bk)
+            if x.get(xk) is not None and f:
+                fields[xk] = {"row": (f["rows"][0] + 1) if f.get("rows") else None, "text": f["printed"] or "", "conf": f["conf"] if f["boxes"] else 1.0,
+                              "boxes": f["boxes"], "status": f["status"], "note": f.get("note"), "jev": f.get("jev")}
+        x["bill"] = rec["bill"]
+    else:
+        for f in FIELDS:
+            if x.get(f) is not None:
+                i = _row_for(f, x[f], rec["rows"])
+                if i is not None:
+                    r = rec["rows"][i]
+                    fields[f] = {"row": i + 1, "text": r["text"], "conf": r["conf"], "boxes": r["boxes"]}
     x["scan"] = {"photo": rec["photo"], "reader": rec["reader"], "read_ms": rec["ms"], "fields": fields}
 
 
 def check_legibility(x):
     s = x["scan"]
-    ev = [{"source": f"photo {s['photo']}", "field": k, "value": f"row {c['row']}: \"{c['text']}\" (confidence {c['conf']:.2f})"}
+    ev = [{"source": f"photo {s['photo']}", "field": k,
+           "value": (f"row {c['row']}: " if c.get("row") else "") + f"\"{c['text']}\" (confidence {c['conf']:.2f})"
+                    + (f"; {c['status']}" if c.get("status") else "") + (f"; Jev {c['jev']}" if c.get("jev") else "")}
           for k, c in s["fields"].items()]
+    b = x.get("bill") or {}
+    ev += [{"source": f"photo {s['photo']}", "field": "check: " + c["name"].replace("_", " "), "value": ("ok: " if c["ok"] else "does not hold: ") + c["detail"]}
+           for c in b.get("checks", [])]
     if x["doc_type"] in ("invoice", "unknown"):
         missing = [label for label, ok in (("invoice number", x.get("invoice_no")), ("amount", x.get("amount_inr")),
                                            ("GSTIN or vendor name", x.get("gstin") or x.get("vendor_name_text"))) if not ok]
         if missing:
-            return ap.chk("legibility", "fail", f"Could not read the {', '.join(missing)} from the photo {s['photo']}. Not guessed: "
-                          "rescan the bill in better light, or key it in.", ev, weight=80)
+            hint = b.get("quality_note") or "Rescan the bill in better light, or key it in."
+            return ap.chk("legibility", "fail", f"Could not read the {', '.join(missing)} from the photo {s['photo']}. Not guessed. {hint}", ev, weight=80)
+    conflict = [k for k, c in s["fields"].items() if c.get("status") == "conflict"]
+    if conflict:
+        notes = "; ".join(f"{k}: {s['fields'][k].get('note')}" for k in conflict)
+        return ap.chk("legibility", "warn", f"Rules and Jev disagree on {', '.join(conflict)} ({notes}). Held for a person to compare with the photo", ev, weight=30)
+    broken = [c for c in b.get("checks", []) if c["name"] in ("taxable_plus_tax_equals_total", "total_matches_words") and not c["ok"]]
+    if broken:
+        return ap.chk("legibility", "warn", "The bill's own figures do not agree: " + "; ".join(c["detail"] for c in broken), ev, weight=30)
     low = [k for k, c in s["fields"].items() if c["conf"] < CONFIG["min_read_confidence"]]
     if low:
         return ap.chk("legibility", "warn", f"Read {', '.join(low)} from the photo with low confidence; compare with the photo before approving", ev, weight=30)
@@ -252,8 +350,11 @@ def scan_bytes(data):
     else:
         t0 = time.time()
         r = read_image(photo)
-        rec = {"photo": name + ext, "reader": r["reader"], "ms": int((time.time() - t0) * 1000),
-               "lines": r["lines"], "rows": rows_from_lines(r["lines"])}
+        rec = {"photo": name + ext, "reader": r["reader"], "ms": int((time.time() - t0) * 1000), "size": r.get("size"),
+               "lines": r["lines"], "rows": rows_from_lines(r["lines"], size=r.get("size"))}
+        b = bill.parse(r["lines"], r.get("size"))
+        bill.review_with_jev(b, f"inv:{name}.txt")   # second opinion on fields with several candidates; cached, never blocks
+        rec["bill"] = bill.public(b)
         rec["text_sha"] = _sha(_text(rec).encode())
         _write(rec_path, json.dumps(rec).encode())
     store.ledger_add(f"inv:{name}.txt", f"local_ocr/{rec['reader']}", h, hit, 0.0, 0 if hit else rec["ms"], None)
