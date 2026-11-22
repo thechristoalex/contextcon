@@ -57,6 +57,37 @@
 .hbar .t{height:8px;border-radius:4px;background:var(--line);overflow:hidden}.hbar .t i{display:block;height:100%;background:var(--blue);border-radius:4px}
 .big{font:500 30px/1.1 var(--sans);font-variant-numeric:tabular-nums}
 @media(max-width:900px){.kgrid{grid-template-columns:1fr 1fr}.ins{grid-template-columns:1fr}.ttabs a{padding:0 8px}.thead .brand{display:none}}
+/* efferd-style blocks, rebuilt natively */
+.blk{border:1px solid var(--line);border-radius:10px;background:var(--bg);overflow:hidden}
+.blk>.bh{display:flex;align-items:center;gap:10px;padding:14px 16px 0}
+.blk>.bh h3{margin:0;font-size:14px;font-weight:600}
+.blk>.bh .sub{display:block;color:var(--fg-3);font-size:12px;font-weight:400}
+.blk>.bh .rt{margin-left:auto;display:flex;gap:6px}
+.blk>.bb{padding:12px 16px 16px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--bg);font:500 12px var(--sans);color:var(--fg-2);padding:4px 10px;cursor:pointer}
+.seg button.on{background:var(--fg);color:#fff}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.strip>div{padding:14px 16px;border-right:1px solid var(--line)}.strip>div:last-child{border-right:0}
+.strip .v{font:500 22px/1.2 var(--sans);margin-top:4px;font-variant-numeric:tabular-nums}
+.delta{display:inline-flex;align-items:center;gap:3px;font:500 11px var(--mono);padding:1px 6px;border-radius:9px;margin-left:6px;vertical-align:middle}
+.delta.up{color:var(--paid);background:var(--paid-soft)}.delta.dn{color:var(--bad);background:var(--bad-soft)}.delta.nt{color:var(--fg-3);background:var(--bg-sub)}
+.g2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.chart svg{width:100%;height:auto;display:block}
+.chart .tip{font:500 11px var(--mono);color:var(--fg-3)}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.alert:last-child{border-bottom:0}.alert:hover .t{color:var(--blue)}
+.alert .t{font-weight:500}.alert small{display:block;color:var(--fg-3)}
+.donut{display:flex;gap:16px;align-items:center}
+.leg{display:grid;gap:6px;font-size:12px}.leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--bg);border-left:1px solid var(--line-2);box-shadow:var(--shadow-pop);z-index:40;transform:translateX(100%);transition:transform var(--slow) var(--ease);display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dh{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.drawer .db{padding:16px 18px;overflow:auto;flex:1}
+.tier{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--mono);padding:2px 8px;border-radius:10px;border:1px solid}
+.tier.low{color:var(--paid);border-color:#bfe3d3;background:var(--paid-soft)}.tier.med{color:var(--held);border-color:#f0d5a8;background:var(--held-soft)}.tier.high{color:var(--bad);border-color:#efc2bc;background:var(--bad-soft)}.tier.na{color:var(--fg-3);border-color:var(--line-2)}
+@media(max-width:900px){.g2,.g3,.strip{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -70,6 +101,7 @@
   <div class="top" id="top"></div>
   <div class="view" id="view"></div>
 </div>
+<div class="drawer" id="drawer" role="dialog" aria-label="Vendor details"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="pal" id="pal" role="dialog" aria-modal="true" aria-label="Command palette"><div class="bx"><input id="pq" placeholder="Type a command or search documents…" autocomplete="off"><div class="res" id="pres"></div></div></div>
 
@@ -143,7 +175,7 @@ async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
 const blobUrl=async p=>{const r=await fetch(p);return URL.createObjectURL(await r.blob())};
-async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
+async function go(id,arg){stopCam();$('#drawer')&&$('#drawer').classList.remove('on');ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
   try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings,insights})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
@@ -172,6 +204,26 @@ function wireScan(){
   $('#pfile').onchange=e=>fromFile(e.target.files[0]);
 }
 
+
+/* ---------- shared chart helpers (inline SVG, no library) ---------- */
+function areaChart(series,{h=160,labels=[],fmt=v=>v}={}){const W=600,H=h,P=24,n=Math.max(2,series[0].pts.length),mx=Math.max(1,...series.flatMap(s=>s.pts));
+  const X=i=>P+i*(W-2*P)/(n-1),Y=v=>H-P-(v/mx)*(H-2*P);
+  const grid=[0,.5,1].map(f=>`<line x1="${P}" x2="${W-P}" y1="${Y(mx*f)}" y2="${Y(mx*f)}" stroke="var(--line)"/><text x="${P-4}" y="${Y(mx*f)+3}" text-anchor="end" font-size="9" fill="var(--fg-3)">${fmt(mx*f)}</text>`).join('');
+  const paths=series.map((s,k)=>{const d=s.pts.map((v,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    return `<defs><linearGradient id="ag${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.c}" stop-opacity=".22"/><stop offset="1" stop-color="${s.c}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} L${X(n-1)} ${H-P} L${X(0)} ${H-P}Z" fill="url(#ag${k})"/><path d="${d}" fill="none" stroke="${s.c}" stroke-width="1.6"/>${s.pts.map((v,i)=>v?`<circle cx="${X(i)}" cy="${Y(v)}" r="2.5" fill="${s.c}"><title>${labels[i]||''}: ${fmt(v)}</title></circle>`:'').join('')}`}).join('');
+  const lab=labels.map((l,i)=>i%Math.ceil(n/7)===0?`<text x="${X(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--fg-3)">${l}</text>`:'').join('');
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="chart">${grid}${paths}${lab}</svg></div>`}
+function donut(parts,size=110){const tot=parts.reduce((a,p)=>a+p.v,0)||1;let a0=-Math.PI/2;const r=size/2-8,c=size/2;
+  const arcs=parts.filter(p=>p.v).map(p=>{const a1=a0+p.v/tot*Math.PI*2,lg=a1-a0>Math.PI?1:0;const d=`M${c+r*Math.cos(a0)} ${c+r*Math.sin(a0)} A${r} ${r} 0 ${lg} 1 ${c+r*Math.cos(a1)} ${c+r*Math.sin(a1)}`;a0=a1;return `<path d="${d}" fill="none" stroke="${p.c}" stroke-width="14"><title>${p.l}: ${p.v}</title></path>`}).join('');
+  return `<div class="donut"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}<text x="${c}" y="${c+5}" text-anchor="middle" font-size="16" font-weight="600" fill="var(--fg)">${tot}</text></svg><div class="leg">${parts.map(p=>`<span><i style="background:${p.c}"></i>${p.l} <b class="mono">${p.v}</b></span>`).join('')}</div></div>`}
+const STC={paid:'#1f8a63',awaiting_approval:'#384ce3',held:'#c27a12',duplicate:'#c03a2b',rejected:'#8a90a0'};
+function dayBuckets(items,tsKey,valFn,days){const now=new Date();now.setHours(23,59,59,999);const out=Array(days).fill(0),lab=[];
+  for(let i=days-1;i>=0;i--){const d=new Date(now-i*86400000);lab.push(d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}))}
+  items.forEach(it=>{const t=it[tsKey]*1000;const i=days-1-Math.floor((now-t)/86400000);if(i>=0&&i<days)out[i]+=valFn(it)});return {out,lab}}
+function tierOf(v,inv){if(!v.trust)return ['na','Not checked'];const holds=inv.filter(r=>r.vendor_id===v.vendor_id&&['held','duplicate'].includes(r.state)).length;
+  if(v.trust==='CANNOT_VERIFY')return ['high','High'];if(v.trust==='HOLD'||holds>1)return ['med','Medium'];return holds?['med','Medium']:['low','Low']}
+
 /* ============ screens ============ */
 async function dash(){
   topbar('');TOP.style.display='none';
@@ -199,8 +251,12 @@ async function dash(){
     <div class="kc" data-go="insights"><div class="lbl">Stopped</div><div class="v" data-count="${sum([...h,...d])}" data-fmt="inr">0</div><div class="s">held or duplicate</div></div></div>
    <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span class="lbl" style="color:var(--fg-2)">Today</span><span class="f3">0 of ${todo.length} done</span></div>
    <div class="today">${todo.map((t,i)=>`<div class="td rowin" style="animation-delay:${i*25}ms" data-i="${i}"><span class="st ${t.ic}">${ICON[t.ic]||ICON.none}</span><div class="grow">${esc(t.t)}<small>${esc(t.s)}</small></div><span class="f3">›</span></div>`).join('')||'<div class="empty"><b>Nothing needs you today</b>Scan a bill to start.</div>'}</div>
+   <div class="g2" style="grid-template-columns:1fr 1fr;margin-top:28px">
+    <div class="blk"><div class="bh"><h3>Recent payments<span class="sub">Each paid once, after approval</span></h3><span class="rt"><button class="btn sm" onclick="go('ledger')">Ledger</button></span></div><div class="bb">${pay.slice(-5).reverse().map(p=>`<div class="alert" onclick="go('ledger')"><span class="st paid">${ICON.paid}</span><div style="flex:1"><span class="t">${esc(p.payee)}</span><small>${esc(p.approved_by)} · ${ago(p.paid_at)}</small></div><span class="mono num">${inr(p.amount_inr)}</span></div>`).join('')||'<div class="f3">No payments yet.</div>'}</div></div>
+    <div class="blk"><div class="bh"><h3>Vendors to watch<span class="sub">Verdict, holds and checks not run</span></h3><span class="rt"><button class="btn sm" onclick="go('vendors')">Vendors</button></span></div><div class="bb">${vend.map(v=>{const [k,l]=tierOf(v,INV);return {v,k,l}}).sort((a,b)=>({high:0,med:1,na:2,low:3}[a.k]-{high:0,med:1,na:2,low:3}[b.k])).slice(0,5).map(({v,k,l})=>`<div class="alert" data-vd="${esc(v.vendor_id)}"><span class="tier ${k}">${l}</span><div style="flex:1"><span class="t">${esc(v.legal_name)}</span><small>${esc(v.domain||'')}</small></div></div>`).join('')}</div></div>
+   </div>
   </div>`;
-  countUp(V);wireScan();
+  countUp(V);wireScan();$$('[data-vd]').forEach(e=>e.onclick=()=>vendorDrawer(e.dataset.vd));
   $$('.kc').forEach(c=>c.onclick=()=>{if(c.dataset.f)FILTER=c.dataset.f;go(c.dataset.go)});
   $$('.td').forEach(el=>el.onclick=()=>{const t=todo[+el.dataset.i];t.v?go('vcheck',{n:t.v.legal_name,w:t.v.domain||'',d:t.v.director||''}):go('case',t.k)});
   $('#pf2').onchange=e=>window.__scanFile&&window.__scanFile(e.target.files[0]);
@@ -231,6 +287,8 @@ async function insights(){
     <div class="kc"><div class="lbl">Paid once</div><div class="v" data-count="${pay.reduce((a,p)=>a+p.amount_inr,0)}" data-fmt="inr">0</div><div class="s">${pay.length} payment${pay.length===1?'':'s'} · 0 twice</div></div>
     <div class="kc"><div class="lbl">Namesakes cleared</div><div class="v" data-count="${cleared}">0</div><div class="s">${escal} escalated for a person</div></div>
     <div class="kc"><div class="lbl">Data cost</div><div class="v">₹${Math.round(cost).toLocaleString('en-IN')}</div><div class="s">${credits.toFixed(1)} Crustdata credits</div></div></div>
+   <div class="g2"><div class="blk"><div class="bh"><h3>Money through the desk<span class="sub">₹ by document date, paid vs held vs duplicate</span></h3><span class="rt"><span class="seg" id="rng"><button data-d="7" class="on">7 days</button><button data-d="30">30 days</button></span></span></div><div class="bb" id="flow"></div></div>
+    <div class="blk"><div class="bh"><h3>Outcomes<span class="sub">Every document, by result</span></h3></div><div class="bb">${donut(Object.entries({paid:'Paid',awaiting_approval:'Needs approval',held:'Held',duplicate:'Duplicate',rejected:'Not payable'}).map(([k,l])=>({l,c:STC[k],v:INV.filter(r=>r.state===k).length})))}</div></div></div>
    <div class="ins">
     <div class="box"><div class="hd"><span class="lbl">Where money was stopped</span></div><div class="bd">${Object.entries(reasons).map(([k,v])=>`<div class="hbar"><span>${k}</span><span class="t"><i style="width:${v/mx*100}%"></i></span><span class="mono r">${inr(v)}</span></div>`).join('')}</div></div>
     <div class="box"><div class="hd"><span class="lbl">Price against cost</span></div><div class="bd">
@@ -243,6 +301,11 @@ async function insights(){
       <p class="f3" style="margin:10px 0 0">${cannot} question${cannot===1?'':'s'} answered "cannot verify" instead of guessed.</p></div></div>
     <div class="box"><div class="hd"><span class="lbl">Recent activity</span></div><div class="feed">${ev.slice(0,10).map(e=>`<div class="ev"><span class="f3">${ago(e.at)}</span><span class="f2">${esc(e.msg.slice(0,100))}</span></div>`).join('')}</div></div>
    </div></div>`;
+  const drawFlow=days=>{const sm=st=>dayBuckets(INV.filter(r=>st.includes(r.state)),'updated_at',r=>r.amount_inr||0,days);
+    const a=sm(['paid','awaiting_approval']),b=sm(['held']),c=sm(['duplicate']);
+    $('#flow').innerHTML=areaChart([{c:'#1f8a63',pts:a.out},{c:'#c27a12',pts:b.out},{c:'#c03a2b',pts:c.out}],{labels:a.lab,fmt:v=>v>=1e5?'₹'+(v/1e5).toFixed(1)+'L':'₹'+Math.round(v/1000)+'k'})+
+      `<div class="leg" style="grid-auto-flow:column;justify-content:start;gap:16px;margin-top:6px"><span><i style="background:#1f8a63"></i>Paid or ready</span><span><i style="background:#c27a12"></i>Held</span><span><i style="background:#c03a2b"></i>Duplicate</span></div>`};
+  drawFlow(7);$$('#rng button').forEach(b=>b.onclick=()=>{$$('#rng button').forEach(x=>x.classList.toggle('on',x===b));drawFlow(+b.dataset.d)});
   countUp(V);$('#act').onclick=()=>go('activity');
 }
 
@@ -256,6 +319,11 @@ async function inbox(){
     $$('#tb tr[data-k]').forEach((tr,i)=>{tr.onclick=()=>go('case',tr.dataset.k);tr.onmouseenter=()=>{SEL=i;$$('#tb tr').forEach((x,j)=>x.classList.toggle('sel',j===i))}})};
   V.innerHTML=`${scanBox()}
    <div id="dz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Add an invoice or email</span></div><div style="padding:14px;display:grid;gap:8px"><input id="fname" placeholder="file name, e.g. 08_new_invoice.txt"><textarea id="txt" placeholder="Paste the invoice or email text"></textarea><div><button class="btn primary" id="send">Process document</button></div></div></div>
+   ${(()=>{const g=k=>INV.filter(r=>r.state===k),sm=a=>a.reduce((x,r)=>x+(r.amount_inr||0),0);return `<div class="strip">
+     <div><div class="lbl">Needs approval</div><div class="v">${inr(sm(g('awaiting_approval')))}</div><div class="f3">${g('awaiting_approval').length} invoice(s)</div></div>
+     <div><div class="lbl">Held</div><div class="v">${inr(sm(g('held')))}</div><div class="f3">${g('held').length} document(s)</div></div>
+     <div><div class="lbl">Paid</div><div class="v">${inr(sm(g('paid')))}</div><div class="f3">${g('paid').length} invoice(s), each once</div></div>
+     <div><div class="lbl">Duplicates stopped</div><div class="v">${inr(sm(g('duplicate')))}</div><div class="f3">${g('duplicate').length} caught</div></div></div>`})()}
    <div class="chips">${Object.entries(F).map(([k,[l,f]])=>`<button class="chip ${FILTER===k?'on':''}" data-f="${k}">${l}<b>${INV.filter(f).length}</b></button>`).join('')}<input class="search" id="q" placeholder="Filter…" value="${esc(Q)}"></div>
    <div class="tblwrap"><table class="tbl"><thead><tr><th>Status</th><th>Invoice</th><th>Vendor</th><th class="r">Amount</th><th class="r">Risk</th><th>Reason</th><th class="r">Updated</th></tr></thead><tbody id="tb"></tbody></table></div>
    <div class="f3" style="margin-top:10px"><span class="kbd">j</span> <span class="kbd">k</span> move · <span class="kbd">Enter</span> open · <span class="kbd">/</span> filter · <span class="kbd">⌘K</span> jump</div>`;
@@ -340,17 +408,55 @@ async function approvals(){
 }
 
 async function vendors(){
-  topbar('Vendors',{acts:`<button class="btn primary" id="newv">Check a new vendor</button>`});V.innerHTML=skel(4);const v=await api('/api/vendors');
-  const vs=x=>x==='CLEAR'?'pass':x==='HOLD'?'warn':x?'fail':'none';
-  V.innerHTML=`<p class="f2" style="margin:0 0 16px">The vendor master. Only the bank account verified at onboarding is ever paid.</p>
-  <div class="tblwrap"><table class="tbl"><thead><tr><th>Vendor</th><th>Domain</th><th>GSTIN</th><th>Verified account</th><th>Check</th><th></th></tr></thead><tbody>
-  ${v.map((x,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td><span class="mono f3">${esc(x.vendor_id)}</span>&nbsp; ${esc(x.legal_name)}</td><td class="mono">${esc(x.domain||'—')}</td><td class="mono">${esc(x.gstin||'—')}</td><td class="mono" title="IFSC ${esc(x.bank?.ifsc)} · verified ${esc(x.bank?.verified_on)}">${esc(x.bank?.account_no)} <span class="f3">· ${esc(x.bank?.verified_on)}</span></td>
-   <td><span class="st">${ICON[vs(x.trust)]}<span class="t ${x.trust?'':'f3'}">${x.trust?esc(nice(x.trust).toLowerCase().replace(/^./,c=>c.toUpperCase())):'Not run'}</span></span></td>
-   <td class="r"><button class="btn sm" data-v="${esc(x.legal_name)}" data-w="${esc(x.domain||'')}" data-d="${esc(x.director||'')}">Check now</button></td></tr>`).join('')}</tbody></table></div>`;
-  $$('[data-v]').forEach(b=>b.onclick=()=>go('vcheck',{n:b.dataset.v,w:b.dataset.w,d:b.dataset.d}));
+  topbar('Vendors',{acts:`<button class="btn primary" id="newv">Check a new vendor</button>`});V.innerHTML='<div style="padding:20px 24px">'+skel(4)+'</div>';
+  const [v,pay]=await Promise.all([api('/api/vendors'),api('/api/payments'),refreshInv()]);
+  const rows=v.map(x=>{const inv=INV.filter(r=>r.vendor_id===x.vendor_id),paid=pay.filter(p=>p.vendor_id===x.vendor_id).reduce((a,p)=>a+p.amount_inr,0);const [k,l]=tierOf(x,INV);
+    return {x,inv,paid,k,l,bc:inv.filter(r=>r.doc_type==='bank_change_request').length}});
+  const cnt=k=>rows.filter(r=>r.k===k).length;
+  V.innerHTML=`<div style="padding:20px 24px 64px"><div class="strip">
+    <div><div class="lbl">Vendors</div><div class="v">${v.length}</div><div class="f3">in the vendor master</div></div>
+    <div><div class="lbl">Low risk</div><div class="v" style="color:var(--paid)">${cnt('low')}</div><div class="f3">verified, no holds</div></div>
+    <div><div class="lbl">Needs attention</div><div class="v" style="color:var(--held)">${cnt('med')+cnt('high')}</div><div class="f3">held invoices or unverifiable</div></div>
+    <div><div class="lbl">Not checked yet</div><div class="v">${cnt('na')}</div><div class="f3">check before first payment</div></div></div>
+  <div class="tblwrap"><table class="tbl"><thead><tr><th>Vendor</th><th>Risk</th><th>Vendor check</th><th class="r">Invoices</th><th class="r">Paid</th><th>Verified account</th><th>Bank changes</th><th></th></tr></thead><tbody>
+  ${rows.map((r,i)=>`<tr class="click rowin" style="animation-delay:${i*20}ms" data-vd="${esc(r.x.vendor_id)}"><td><span class="mono f3">${esc(r.x.vendor_id)}</span>&nbsp; ${esc(r.x.legal_name)}<div class="f3 mono" style="font-size:11px">${esc(r.x.domain||'')}</div></td>
+   <td><span class="tier ${r.k}">${r.l}</span></td><td>${r.x.trust?esc(nice(r.x.trust).toLowerCase()):'<span class="f3">not run</span>'}</td>
+   <td class="r mono">${r.inv.length}</td><td class="r mono num">${inr(r.paid)}</td><td class="mono" title="IFSC ${esc(r.x.bank?.ifsc)}">${esc(r.x.bank?.account_no)} <span class="f3">· ${esc(r.x.bank?.verified_on)}</span></td>
+   <td>${r.bc?`<span class="tier med">${r.bc} held</span>`:'<span class="f3">none</span>'}</td>
+   <td class="r"><button class="btn sm" data-v="${esc(r.x.legal_name)}" data-w="${esc(r.x.domain||'')}" data-d="${esc(r.x.director||'')}">Check now</button></td></tr>`).join('')}</tbody></table></div>
+  <p class="f3" style="margin-top:10px">Click a vendor for its verification, bank-detail history, invoices and payments.</p></div>`;
+  $$('[data-v]').forEach(b=>b.onclick=e=>{e.stopPropagation();go('vcheck',{n:b.dataset.v,w:b.dataset.w,d:b.dataset.d})});
+  $$('tr[data-vd]').forEach(t=>t.onclick=()=>vendorDrawer(t.dataset.vd));
   $('#newv').onclick=()=>go('vcheck');
 }
-
+async function vendorDrawer(id){const D=$('#drawer');D.innerHTML='<div class="db">'+skel(5)+'</div>';D.classList.add('on');
+  const [v,pay]=await Promise.all([api('/api/vendors'),api('/api/payments')]);const x=v.find(z=>z.vendor_id===id);if(!x){D.classList.remove('on');return}
+  let rep=null;try{const j=await api('/cases/'+encodeURIComponent('trust:'+id));rep=j.report}catch(_){}
+  const inv=INV.filter(r=>r.vendor_id===id),pd=pay.filter(p=>p.vendor_id===id),[k,l]=tierOf(x,INV);
+  D.innerHTML=`<div class="dh"><div><div class="lbl">${esc(x.vendor_id)}</div><b style="font-size:15px">${esc(x.legal_name)}</b></div><span class="tier ${k}" style="margin-left:8px">${l} risk</span><button class="btn ghost sm" style="margin-left:auto" id="dx">Close</button></div>
+   <div class="db">
+    <div class="prop"><span class="k">Domain</span><span class="v mono">${esc(x.domain||'—')}</span></div>
+    <div class="prop"><span class="k">GSTIN</span><span class="v mono">${esc(x.gstin||'—')}</span></div>
+    <div class="prop"><span class="k">Director</span><span class="v">${esc(x.director||'—')}</span></div>
+    <div class="prop"><span class="k">Verified a/c</span><span class="v mono">${esc(x.bank?.account_no)} · ${esc(x.bank?.ifsc)}</span></div>
+    <div class="prop"><span class="k">Verified on</span><span class="v">${esc(x.bank?.verified_on||'—')}</span></div>
+    <div class="prop"><span class="k">Contact</span><span class="v">${esc(x.contact?.email||'—')}</span></div>
+    <div class="sec"><span class="lbl">Vendor check</span>${rep?`<span class="f3">${rep.cost.credits} credits · ₹${rep.cost.inr} · ${rep.screening.hits_cleared} namesakes cleared</span>`:''}</div>
+    ${rep?`<p style="margin:0 0 8px">${esc(rep.summary)}</p>${rep.facts.slice(0,8).map(f=>`<div class="e f2" style="font-size:12px;margin:4px 0"><b>${esc(f.claim)}:</b> ${esc(String(f.value).slice(0,120))}</div>`).join('')}${rep.cannot_verify.map(m=>`<div class="f3" style="font-size:12px">○ Cannot verify: ${esc(m)}</div>`).join('')}`:'<p class="f3">Not checked yet.</p>'}
+    <div style="margin:10px 0 0"><button class="btn sm primary" id="dchk">Run vendor check</button></div>
+    <div class="sec"><span class="lbl">Bank-detail history</span></div>
+    <div class="alert"><span class="st paid">${ICON.paid}</span><div><span class="t">Account verified at onboarding</span><small>${esc(x.bank?.account_no)} · ${esc(x.bank?.verified_on)}</small></div></div>
+    ${inv.filter(r=>r.doc_type==='bank_change_request'||/account/i.test(r.reason||'')).map(r=>`<div class="alert" data-k="${esc(r.invoice_key)}"><span class="st held">${ICON.held}</span><div><span class="t">${r.doc_type==='bank_change_request'?'Change request held':'Invoice asked for a different account'}</span><small>${esc((r.reason||'').slice(0,110))} · ${ago(r.updated_at)}</small></div></div>`).join('')}
+    <div class="sec"><span class="lbl">Documents</span><span class="f3">${inv.length}</span></div>
+    ${inv.map(r=>`<div class="alert" data-k="${esc(r.invoice_key)}">${st(r.state)}<div style="flex:1"><span class="t mono" style="font-size:12px">${esc(r.invoice_no||nice(r.doc_type))}</span></div><span class="mono num">${inr(r.amount_inr)}</span></div>`).join('')||'<p class="f3">None yet.</p>'}
+    <div class="sec"><span class="lbl">Payments</span><span class="f3">${inr(pd.reduce((a,p)=>a+p.amount_inr,0))}</span></div>
+    ${pd.map(p=>`<div class="alert"><span class="st paid">${ICON.paid}</span><div style="flex:1"><span class="t mono" style="font-size:12px">${esc(p.ref)}</span><small>${esc(p.approved_by)} · ${ago(p.paid_at)}</small></div><span class="mono num">${inr(p.amount_inr)}</span></div>`).join('')||'<p class="f3">None yet.</p>'}
+   </div>`;
+  $('#dx').onclick=()=>D.classList.remove('on');
+  $('#dchk').onclick=()=>{D.classList.remove('on');go('vcheck',{n:x.legal_name,w:x.domain||'',d:x.director||''})};
+  D.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{D.classList.remove('on');go('case',e.dataset.k)});
+}
+window.vendorDrawer=vendorDrawer;
 async function vcheck(pre){
   topbar('Check a vendor',{crumb:'<a onclick="go(\'vendors\')">Vendors</a>'});
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Is this a real, trading business, who runs it, how long has it existed, and is anything off. Live sources, every fact cited.</p>
@@ -432,6 +538,7 @@ document.addEventListener('keydown',e=>{
   if(typing){if(e.key==='Escape')document.activeElement.blur();return}
   if(gKey){gKey=false;const sc=SCREENS.find(x=>x.k===e.key);if(sc){go(sc.id);e.preventDefault()}return}
   if(e.key==='g'){gKey=true;setTimeout(()=>gKey=false,900);return}
+  if(e.key==='Escape'&&$('#drawer').classList.contains('on')){$('#drawer').classList.remove('on');return}
   if(e.key==='Escape'&&ROUTE.id==='case'){go('inbox');return}
   if(ROUTE.id==='inbox'){const rows=$$('#tb tr[data-k]');
     const mv=n=>{SEL=Math.max(0,Math.min(rows.length-1,SEL+n));rows.forEach((r,i)=>r.classList.toggle('sel',i===SEL));rows[SEL]?.scrollIntoView({block:'nearest'});e.preventDefault()};
