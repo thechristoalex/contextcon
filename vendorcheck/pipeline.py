@@ -244,19 +244,28 @@ class Job:
 
     # ---------- step 3: website ----------
     def s_website(self, url):
-        """Fetch the site. If it fails, try the same host with or without www once: many sites only hold a
-        certificate for one of the two (delhivery.com fails with ERR_CERT_COMMON_NAME_INVALID, www.delhivery.com loads).
-        Never a different domain, so the check stays about the domain that was given."""
-        tried = []
-        for u in [url] + [www_variant(url)]:
-            resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": [u]})
+        """Fetch the vendor's site. Large sites often block automated fetches and return an empty shell, and some only
+        hold a certificate for one of x.com / www.x.com (delhivery.com fails with ERR_CERT_COMMON_NAME_INVALID). Either
+        would hold an honest vendor for 'website did not load'. So a failed or near-empty fetch is retried with Crustdata's
+        human_mode (a browser-like fetch), then on the same host with or without www. Never a different domain, so the
+        check stays about the domain that was given. Each retry costs 1 credit and only runs on failure."""
+        tries = [(url, False), (url, True), (www_variant(url), True)]
+        best, tried = None, []
+        for u, human in tries:
+            body = {"urls": [u], "human_mode": True} if human else {"urls": [u]}
+            resp, meta = crust.call(self.id, "/web/enrich/live", body)
             page = first_list(resp)[0] if first_list(resp) else {}
             text = visible_text(page.get("content"))
-            out = {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or u, "meta": meta}
-            if out["ok"] and len(text) >= 200:
-                return {**out, "tried": tried}
-            tried.append({"url": u, "error": page.get("message") or page.get("error") or ("almost no text" if out["ok"] else "no response")})
-        return {**out, "tried": tried}
+            got = {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000],
+                   "url": page.get("url") or u, "meta": meta, "fetched_with": "human_mode" if human else "standard"}
+            if got["ok"] and len(text) >= 200:
+                return {**got, "tried": tried}
+            if best is None or len(text) > len(best["text"]):
+                best = got
+            tried.append({"url": u, "fetched_with": got["fetched_with"],
+                          "error": page.get("message") or page.get("error") or (f"{len(text)} characters of text" if got["ok"] else "no response")})
+            store.log(self.id, f"website {u} ({got['fetched_with']}) failed: {tried[-1]['error']}; trying the next way")
+        return {**best, "tried": tried}
 
     # ---------- step 4: registry identifiers from the web ----------
     # ---------- page verification: never cite a search snippet or a redirect ----------
@@ -495,8 +504,8 @@ class Job:
             w = self.step("website", lambda: self.s_website(url))
             wsrc = crust.source_ref(w["meta"], "page title / text", url=w["url"])
             if not w["ok"] or len(w["text"]) < 200:
-                why = "; ".join(f"{t['url']}: {t['error']}" for t in w.get("tried", [])) or "no content"
-                self.flag("amber", f"Website {url} did not load or has almost no content ({why})", wsrc)
+                why = "; ".join(f"{t['url']} ({t['fetched_with']}): {t['error']}" for t in w.get("tried", [])) or "no content"
+                self.flag("amber", f"Website {url} did not load or has almost no content, even with a browser-like fetch ({why})", wsrc)
             else:
                 # rules decide; Jev can add a flag or the sentence to quote, never remove a flag
                 toks = norm_tokens(legal)
