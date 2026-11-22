@@ -76,6 +76,8 @@ Each bank line is posted once. A line's key is its date, description, amount and
 
 The flow, as Mermaid:
 
+**Public diagram link** (opens for anyone, no sign-in; for the submission form): [architecture diagram](https://mermaid.ink/img/pako:eNptVVFv4jgQ_isjXm5XpKDd072gUysILKCyNEdYtKtcH0wyBF8dO7IdWoT6329sJ7SV9gUHe-bzzDffjC-9XBXYG0HvINRzfmTawmrzrwRYrrOl3KuXEQzsi4UhDLAStDS1UKx4hJubW4hXWSyYMfxwHgGXJ8VzJJM9k09AWLJ0_zTmyGvrvyouC9SPDj9eeYjZz2z2YjXLLRw4isKMoECLmiy5sTwnpxJfvMfsp_fYLbNlgdLSpXBCWSg9gnm6Xa4jsEeUYNDdAYWqGJftnmQVeozd0mNMfySXKWXCc2bx7u-9Ht5KpSsmuMHimolUg8ifKQ2GENrr-qxSjbT9gnz7ycOrwyVAAoYzmoCf0cZqGY-3s8d3x1IF2haz-D51-6bZl5rVx3YLiPICa5eAtMQg5k8mAmT5kWiwjZYGmAQ8cTrPKdAT6oLn1l8BkGbp-9ThZNqA243WbJ55tgK8K5OOIBmvwZ5rjGBPFeKyBKs654oZ29YM4Hv2580zO9OmzY8jSB4iKJUqTFdlgnqgNC0woZEVZ8ITAovWe5JNnDSowIwLEwLUnOpeAMtzRyrlV8BRCZfGtWgA22wXgrG6MRb-GnyBPv1-9cd04pZt4HaafYqdEVWHkSg7pezPV0Wg1Dw_RvCMezig7T4NMp0fPwdxhnI4wPF8no3LkmRI5R6RJS-PlqqiuXkCkytNpFGqRgV-ydxVmskzHCjJYSPZiVa2Fzh8Zlp6zEW2mK2mlEKh2cFS9hUaw0r8gCAE1NRbIYjksmgqqj2ra61OTHjRjb2owhZ6u2T8K0uoPIrkMaIWTmebLTzhma7YX7vlnbz9heTknVfZp5RXjWAuopqdKydCKl6JumVlCjcDkh_qM-QuvoHzmjnGlelMKSuNplbSIBmRyD4y2vmTpmrvn27p2n9W3JH7n9oTs-6IljZM-qLhwAkvcq7Sms9v8wMa6WTm2KX5Qu0VWjOQ7KwmaZCcsZSVTyhOd2F4Te6zFZfo6KGZQ8cUuUUadf0OpQ8qzxutXbP5OdCJuqZ0sbgD88RrH8zkPkBOL6mbEw4tchQiLQEs-If-ZVpwIkrQ7Xe-kJPp--GxeNtqB8YkcVVFYuhDTxIhgli-yv2qdn9ZnwpSMuHbCA5aVW4UQq6qmsT5hwH1TLOSaA8JJL8vbXfmQzGq0aQbg9YKipUHnuNdFo_X64ct7Gab5bdfERxpjsOBwmRQo-46w8Pcwia-rGfftsPNdp4Ol9-T1AdL44Z1ySlJT4FoqdnE7nI_btCz18r9TaFeum-mTgS_M1m8meRMFySXH0l4DOYk_MRX1E29VsXtPHJa60XQq-hFYrygh_LSIxor_2QWeGCNsL3X1_8BbgldtA)
+
 ```mermaid
 flowchart LR
   IN[Inbox: .txt / .eml / upload] --> CL[Classify: invoice / bank change / receipt / reminder]
@@ -99,6 +101,17 @@ flowchart LR
   PAY --> L[(Simulated payment ledger)]
   CD -. every call .-> LED[(Cost ledger + response cache)]
   CHECKS -. every step .-> ST[(SQLite: jobs, steps, invoices, actions, events)]
+  CL -- unreadable / no amount --> H
+  BS[Bank statement CSV] --> BK[Line key: date + text + amount + occurrence<br/>already posted? skip]
+  BK --> BD{Same date, payee, amount<br/>as an earlier line?}
+  BD -- yes --> H
+  BD -- no --> BP[Payee: vendor master, else Crustdata identify<br/>+ legal name from the company's own site]
+  BP -. every call .-> LED
+  BP -- no source settles it --> CV[CANNOT VERIFY, held for a person]
+  BP --> RC{NEFT/RTGS/IMPS<br/>to a vendor on file?}
+  RC -- matches an approved payment --> L
+  RC -- no approved payment --> H
+  RC -- card / UPI --> GL[(Posted to ledger account)]
 ```
 
 **Vendor trust (5.1 + 5.2)**, `vendorcheck/pipeline.py`:
@@ -120,6 +133,28 @@ flowchart LR
 - **Source failures.** Up to 3 retries with backoff, honouring `x-ratelimit-reset` on 429. If a source is still down, the check is marked `unavailable` ("source unavailable, not the same as no record") and the invoice is held. `Replay checks` (UI) or `POST /api/recheck` re-runs it later.
 - **Limits.** Cost limit per job (`MAX_CREDITS_PER_JOB`, default 12 credits) and time limit (`MAX_SECONDS_PER_JOB`, default 180 s). Hitting either gives `CANNOT_VERIFY`, never a guess.
 - **Deterministic.** Extraction and decisions are rules, with no LLM in the decision path, so the same input always gives the same verdict.
+- **Vendor verdicts follow the vendor record.** A vendor's check result is reused across its invoices, but it is keyed by the facts it checked: legal name, domain, director and GSTIN. If any of them changes on the vendor master, the vendor is checked again instead of reusing an old `CLEAR`.
+
+## How we tested it
+
+- **Live runs** with Crustdata on 22 Nov 2026 produced the results tables above.
+- **Offline tests:** 18 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
+  - `tests/test_payables.py` (9 tests):
+    - every inbox outcome
+    - re-running the inbox changes nothing
+    - a bank-change email is held with a drafted call-back
+    - pay exactly once (second approval refused, second pay a no-op)
+    - a crash between approval and payment, then restart, pays once
+    - a vendor record changed after approval holds the payment
+    - a changed vendor record is checked again
+    - a source outage holds the invoice instead of passing it
+    - unusual layouts ("Bill No", no amount, an unreadable memo) are held, never filed or guessed
+  - `tests/test_bank.py` (9 tests):
+    - the example statement, end to end
+    - the legal-name citation and its rules
+    - re-running the file, and re-uploading it under another name
+    - reconciling a transfer to exactly one payment
+    - a source outage, the cost limit and the cost report
 
 ## Cost per job and price
 
@@ -129,10 +164,14 @@ Measured from the cost ledger (every Crustdata call records its `X-Credits-Used`
 |---|---|---|---|---|
 | New vendor verified (identify, enrich, website, registry, 3 adverse searches, page fetches) | 7–9 | 7.2–9.2 credits = **₹180–230** | **₹1,500** | ~85% |
 | Invoice processed from an already-verified vendor | 0 | **₹0** (local checks; vendor verdict cached) | **₹60** | ~100% before hosting |
-| Bank-statement line posted | 0–1 | **₹0–5** | **₹5** | 0–100% |
+| Bank-statement line, payee on the vendor master or a merchant seen before | 0 | **₹0** (vendor master, or Crustdata answer from cache) | **₹20** | ~100% before hosting |
+| Bank-statement line, merchant never seen before | 2 (identify 0.2 + site fetch 1.0) | 1.2 credits = **₹30** | **₹20** | −50% on that line |
+| Bank statement, measured live (6 lines, 3 merchants never seen before) | 5 | 2.6 credits = **₹65**, about ₹11 a line | **₹120** (6 × ₹20) | ~45% on a first statement, rising as merchants repeat |
 | Duplicate or bank-change email | 0 | ₹0 | included | — |
 
-The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay an outsourced accounting firm per invoice or per month, and a KYB vendor per business checked. A typical month of 40 new vendors and 2,000 invoices would cost them **₹1,80,000** with us (40 × ₹1,500 + 2,000 × ₹60), against our measured data cost of about **₹9,200** (40 × ₹230). The prices are our proposal, not a market quote. The LLM cost is ₹0 because there is no LLM in the decision path.
+Bank lines are priced per line, not per new merchant. A client's first statement runs at a thin margin because most merchants are new. Later statements are mostly repeat merchants, which cost nothing.
+
+The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay an outsourced accounting firm per invoice or per month, and a KYB vendor per business checked. A typical month of 40 new vendors, 2,000 invoices and 1,000 bank lines would cost them **₹2,00,000** with us (40 × ₹1,500 + 2,000 × ₹60 + 1,000 × ₹20). Our measured data cost for that month is about **₹12,200** (40 × ₹230 for vendors, plus about 100 new merchants × ₹30). The prices are our proposal, not a market quote. The LLM cost is ₹0 because there is no LLM in the decision path.
 
 ## Data sources the service calls
 
@@ -152,12 +191,31 @@ The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay
 - **A broad adverse-media word list** flagged Shadowfax on consumer complaints ("fake delivery"). We switched to legal and regulatory terms only and require person and company in the same article.
 - The research behind the design is in `context/research/` on the `0x1622` branch: a track deep-dive and a vendor-fraud landscape covering HighRadius, Trustpair, Eftsure and the Indian KYB stack. The binding checks (GSTIN ↔ vendor master, bank holder ↔ legal name, sender domain ↔ vendor domain) and re-verification on bank change come from there.
 
-## What is left out, and what's next
+## What is left out
 
 - No MCA/GST registry API: MCA has no public API, and the portals use CAPTCHAs, which we do not bypass. Registry status is reported as "not confirmed" with the reason.
-- No real bank rails or penny drop. Payments go to a simulated ledger.
-- No PEP/sanctions lists yet; OpenSanctions is the next source.
-- Next: Person Enrich to test "director works elsewhere", domain age via RDAP, and a Tally / Zoho Books connector in place of the simulated ledger.
+- No real bank rails or penny drop. Payments go to a simulated ledger with an idempotency key, not to a payment provider's test mode.
+- No PEP/sanctions lists yet.
+- Invoice fields are read with deterministic rules tuned to common Indian invoice layouts. An unusual layout leads to a hold, not a guess, but it does need a person.
+
+## What it could do in the future
+
+| Next | Why not today |
+|---|---|
+| Pay through Razorpay or Stripe test mode, passing our invoice key as the provider's idempotency key | Seven hours. The simulated ledger already proves the exactly-once logic; a provider adds a second guard but no new decision |
+| OpenSanctions screening for directors | A new source needs its own namesake rules, or it trades false negatives for false positives |
+| Domain age via RDAP; Person Enrich to test "the director works somewhere else" | Each is a new signal that needs tuning on real fronts before it can change a verdict |
+| A model step to read unusual invoice layouts, with its cost in the ledger | It would bring a model into the decision path. We kept decisions deterministic so that every verdict can be replayed |
+| A Tally or Zoho Books connector in place of the local ledger | Needs a client's sandbox |
+
+## The future of this service
+
+Today an Indian mid-size company pays three parties to move one rupee safely: an AP team or outsourced accounting firm to process invoices, a KYB vendor to check new suppliers, and an auditor to replay the books. Once agents can do the whole job, these merge into one service:
+- every vendor is checked against live records before its first invoice and re-checked whenever its record changes
+- every rupee leaves exactly once, with a cited reason
+- every bank line is tied back to an approved invoice
+
+The person in the loop stops doing the routine work. They only approve what cannot be undone and judge the cases no source can settle. The firm is paid per job done rather than per hour. The audit trail is a by-product, not a separate engagement.
 
 ## Credits
 
