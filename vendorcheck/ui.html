@@ -109,14 +109,36 @@ async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id
   try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
 
+/* scan a paper bill: same box and wiring on Dashboard and Inbox (needs #scanbtn in the topbar) */
+const scanBox=()=>`<div id="sz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Scan a paper bill · read on this machine, the photo never leaves it</span></div>
+   <div style="padding:14px;display:grid;gap:10px"><video id="cam" autoplay playsinline muted></video>
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="cap" disabled>Capture</button>
+   <label class="btn" style="cursor:pointer">Upload / take photo<input id="pfile" type="file" accept="image/*" capture="environment" hidden></label>
+   <span class="f3" id="smsg">Hold the whole bill flat in frame, in good light.</span></div></div></div>`;
+function wireScan(){
+  const sendPhoto=async src=>{const w0=src.videoWidth||src.naturalWidth,h0=src.videoHeight||src.naturalHeight,k=Math.min(1,2000/Math.max(w0,h0));
+    const c=document.createElement('canvas');c.width=Math.round(w0*k);c.height=Math.round(h0*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+    await busy($('#cap'),'Reading…',async()=>{$('#smsg').textContent='Reading the bill and running the checks…';
+      const r=await api('/api/scan',{image:c.toDataURL('image/jpeg',0.9)});
+      toast(`${esc(r.invoice_key)}: ${esc(LBL[r.state]||r.state||r.outcome||'already processed')}`);go('case',r.invoice_key)});
+    const m=$('#smsg');if(m)m.textContent='Hold the whole bill flat in frame, in good light.'};  // gone once the case page opened
+  $('#scanbtn').onclick=async()=>{const z=$('#sz');if(z.style.display!=='none'){z.style.display='none';stopCam();return}z.style.display='block';
+    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){$('#cam').style.display='none';$('#smsg').textContent='Live camera needs this page on localhost or https: use Upload / take photo.';return}
+    try{CAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});$('#cam').srcObject=CAM;$('#cap').disabled=false}
+    catch(e){$('#cam').style.display='none';$('#smsg').textContent='Camera not available ('+e.name+'): use Upload / take photo.'}};
+  $('#cap').onclick=()=>sendPhoto($('#cam'));
+  $('#pfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.src=URL.createObjectURL(f);
+    try{await img.decode()}catch(_){toast('Could not open that file as a picture: use JPG or PNG','err');return}sendPhoto(img)};
+}
+
 /* ============ screens ============ */
 async function dash(){
-  topbar('Dashboard',{acts:`<button class="btn primary" id="proc">Process inbox</button>`});
+  topbar('Dashboard',{acts:`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn primary" id="proc">Process inbox</button>`});
   V.innerHTML=`<div class="kpis">${[1,2,3,4].map(()=>'<div class="kpi"><div class="skel" style="width:50%"></div><div class="skel" style="width:30%;height:22px;margin-top:10px"></div></div>').join('')}</div>`;
   const [pay,ev]=await Promise.all([api('/api/payments'),api('/api/events'),refreshInv()]);
   const w=INV.filter(r=>r.state==='awaiting_approval'),h=INV.filter(r=>r.state==='held'),d=INV.filter(r=>r.state==='duplicate');
   const paid=pay.reduce((a,r)=>a+r.amount_inr,0), stopped=[...h,...d].reduce((a,r)=>a+(r.amount_inr||0),0);
-  V.innerHTML=`<div class="kpis">
+  V.innerHTML=`${scanBox()}<div class="kpis">
     <div class="kpi"><div class="lbl">Needs approval</div><div class="v" data-count="${w.length}">0</div><div class="s">${inr(w.reduce((a,r)=>a+(r.amount_inr||0),0))} waiting</div></div>
     <div class="kpi"><div class="lbl">Held with reason</div><div class="v" data-count="${h.length}">0</div><div class="s">for a person to review</div></div>
     <div class="kpi"><div class="lbl">Paid once</div><div class="v" data-count="${paid}" data-fmt="inr">0</div><div class="s">${pay.length} payment${pay.length===1?'':'s'}</div></div>
@@ -125,7 +147,7 @@ async function dash(){
     ${[...w,...h].map((r,i)=>`<div class="li rowin" style="animation-delay:${i*20}ms" data-k="${esc(r.invoice_key)}">${st(r.state)}<span class="grow"><span class="mono">${esc(r.invoice_no||nice(r.doc_type))}</span> <span class="f3">· ${esc(r.vendor_id||'')}</span> <span class="f2">${esc((r.reason||'').slice(0,70))}</span></span><span class="mono num">${inr(r.amount_inr)}</span></div>`).join('')||'<div class="empty"><b>Nothing needs you</b>New documents appear here after Process inbox.</div>'}
   </div></div>
   <div class="box"><div class="hd"><span class="lbl">Recent activity</span></div><div class="feed">${ev.slice(0,12).map(e=>`<div class="ev"><span class="f3">${ago(e.at)}</span><span class="f2">${esc(e.msg.slice(0,110))}</span></div>`).join('')}</div></div></div>`;
-  countUp(V);$$('.li[data-k]').forEach(el=>el.onclick=()=>go('case',el.dataset.k));
+  countUp(V);$$('.li[data-k]').forEach(el=>el.onclick=()=>go('case',el.dataset.k));wireScan();
   $('#proc').onclick=e=>busy(e.currentTarget,'Processing…',async()=>{const r=await api('/api/process',{});toast(`Processed ${r.length} document${r.length===1?'':'s'}`);go('dash')});
 }
 
@@ -137,11 +159,7 @@ async function inbox(){
   const draw=()=>{const rows=INV.filter(F[FILTER][1]).filter(r=>!Q||JSON.stringify(r).toLowerCase().includes(Q));SEL=Math.min(SEL,Math.max(0,rows.length-1));
     $('#tb').innerHTML=rows.map((r,i)=>`<tr class="click rowin ${i===SEL?'sel':''}" style="animation-delay:${i*20}ms" data-k="${esc(r.invoice_key)}"><td>${st(r.state)}</td><td class="mono">${esc(r.invoice_no||nice(r.doc_type))}</td><td>${esc(r.vendor_id||'—')}</td><td class="r mono num">${inr(r.amount_inr)}</td><td class="r mono num f3">${r.risk_score??''}</td><td class="f2" title="${esc(r.reason)}">${esc(r.reason||'')}</td><td class="f3 r">${ago(r.updated_at)}</td></tr>`).join('')||`<tr><td colspan="7"><div class="empty"><b>No documents here</b>Change the filter or process the inbox.</div></td></tr>`;
     $$('#tb tr[data-k]').forEach((tr,i)=>{tr.onclick=()=>go('case',tr.dataset.k);tr.onmouseenter=()=>{SEL=i;$$('#tb tr').forEach((x,j)=>x.classList.toggle('sel',j===i))}})};
-  V.innerHTML=`<div id="sz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Scan a paper bill · read on this machine, the photo never leaves it</span></div>
-   <div style="padding:14px;display:grid;gap:10px"><video id="cam" autoplay playsinline muted></video>
-   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="cap" disabled>Capture</button>
-   <label class="btn" style="cursor:pointer">Upload / take photo<input id="pfile" type="file" accept="image/*" capture="environment" hidden></label>
-   <span class="f3" id="smsg">Hold the whole bill flat in frame, in good light.</span></div></div></div>
+  V.innerHTML=`${scanBox()}
    <div id="dz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Add an invoice or email</span></div><div style="padding:14px;display:grid;gap:8px"><input id="fname" placeholder="file name, e.g. 08_new_invoice.txt"><textarea id="txt" placeholder="Paste the invoice or email text"></textarea><div><button class="btn primary" id="send">Process document</button></div></div></div>
    <div class="chips">${Object.entries(F).map(([k,[l,f]])=>`<button class="chip ${FILTER===k?'on':''}" data-f="${k}">${l}<b>${INV.filter(f).length}</b></button>`).join('')}<input class="search" id="q" placeholder="Filter…" value="${esc(Q)}"></div>
    <div class="tblwrap"><table class="tbl"><thead><tr><th>Status</th><th>Invoice</th><th>Vendor</th><th class="r">Amount</th><th class="r">Risk</th><th>Reason</th><th class="r">Updated</th></tr></thead><tbody id="tb"></tbody></table></div>
@@ -149,19 +167,7 @@ async function inbox(){
   draw();
   $$('[data-f]').forEach(b=>b.onclick=()=>{FILTER=b.dataset.f;SEL=0;$$('[data-f]').forEach(x=>x.classList.toggle('on',x===b));draw()});
   $('#q').oninput=e=>{Q=e.target.value.toLowerCase();SEL=0;draw()};
-  const sendPhoto=async src=>{const w0=src.videoWidth||src.naturalWidth,h0=src.videoHeight||src.naturalHeight,k=Math.min(1,2000/Math.max(w0,h0));
-    const c=document.createElement('canvas');c.width=Math.round(w0*k);c.height=Math.round(h0*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);
-    await busy($('#cap'),'Reading…',async()=>{$('#smsg').textContent='Reading the bill and running the checks…';
-      const r=await api('/api/scan',{image:c.toDataURL('image/jpeg',0.9)});
-      toast(`${esc(r.invoice_key)}: ${esc(LBL[r.state]||r.state||r.outcome||'already processed')}`);go('case',r.invoice_key)});
-    $('#smsg').textContent='Hold the whole bill flat in frame, in good light.'};
-  $('#scanbtn').onclick=async()=>{const z=$('#sz');if(z.style.display!=='none'){z.style.display='none';stopCam();return}z.style.display='block';
-    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){$('#cam').style.display='none';$('#smsg').textContent='Live camera needs this page on localhost or https: use Upload / take photo.';return}
-    try{CAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});$('#cam').srcObject=CAM;$('#cap').disabled=false}
-    catch(e){$('#cam').style.display='none';$('#smsg').textContent='Camera not available ('+e.name+'): use Upload / take photo.'}};
-  $('#cap').onclick=()=>sendPhoto($('#cam'));
-  $('#pfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.src=URL.createObjectURL(f);
-    try{await img.decode()}catch(_){toast('Could not open that file as a picture: use JPG or PNG','err');return}sendPhoto(img)};
+  wireScan();
   $('#drop').onclick=()=>{const z=$('#dz');z.style.display=z.style.display==='none'?'block':'none';$('#txt').focus()};
   $('#send').onclick=e=>busy(e.currentTarget,'Checking…',async()=>{const r=await api('/api/upload',{name:$('#fname').value||('upload_'+Date.now()+'.txt'),text:$('#txt').value});toast(`${esc(r.invoice_key||'Document')}: ${esc(LBL[r.state]||r.state||r.outcome)}`);go('case',r.invoice_key)});
   $('#proc').onclick=e=>busy(e.currentTarget,'Processing…',async()=>{const r=await api('/api/process',{});toast(`Processed ${r.length} document${r.length===1?'':'s'}`);inbox()});
