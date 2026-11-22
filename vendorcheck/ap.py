@@ -37,7 +37,7 @@ def vendor_hash(v):
 
 # ---------------- extraction (deterministic: same text -> same fields) ----------------
 
-AMOUNT_RE = re.compile(r"(?:total|amount(?: due| payable)?|grand total|invoice value)\s*[:\-]?\s*(?:inr|rs\.?|₹)?\s*([\d,]+(?:\.\d{1,2})?)", re.I)
+AMOUNT_RE = re.compile(r"(?:total|amount(?: due| payable)?|grand total|invoice value|net payable|amount payable)\s*[:\-]?\s*(?:inr|rs\.?|₹)?\s*([\d,]+(?:\.\d{1,2})?)", re.I)
 
 
 def _find(pat, text, flags=re.I):
@@ -56,7 +56,7 @@ def norm_invoice_no(s):
 
 def classify(text):
     t = text.lower()
-    has_inv_no = bool(re.search(r"invoice\s*(no|number|#)", t))
+    has_inv_no = bool(re.search(r"(invoice|bill)\s*(no|number|#)", t))
     if re.search(r"(chang(ed|ing)|new|update[d]?|switch(ed)?)\s+(our\s+|of\s+)?bank|bank (account )?details have changed|new account details", t) and not has_inv_no:
         return "bank_change_request"
     if has_inv_no or "tax invoice" in t:
@@ -78,10 +78,12 @@ def extract(text):
         "doc_type": classify(text),
         "sender": sender.lower() if sender else None,
         "sender_domain": sender.split("@")[1].lower() if sender else None,
-        "invoice_no": _find(r"invoice\s*(?:no\.?|number|#)\s*[:\-]?\s*([A-Za-z0-9/\-_.]+)", text),
+        "invoice_no": _find(r"(?:invoice|bill)\s*(?:no\.?|number|#)\s*[:\-]?\s*([A-Za-z0-9/\-_.]+)", text),
         "invoice_date": _find(r"(?:invoice\s*)?date\s*[:\-]\s*([0-9]{1,2}[\s/\-][A-Za-z0-9]{1,9}[\s/\-][0-9]{2,4})", text),
         "gstin": (_find(r"gstin\s*(?:no\.?)?\s*[:\-]?\s*([0-9A-Z]{15})", text) or "").upper() or None,
-        "po_no": _find(r"\b(?:p\.?o\.?|purchase order)\s*(?:no\.?|number|#)?\s*[:\-]\s*([A-Za-z0-9/\-]+)", text),
+        # a PO number written out ("PO-1001") wins over a labelled value, so "Ref PO-1001" is not read as "1001"
+        "po_no": (_find(r"\b(PO-\d{3,})\b", text, 0)
+                  or _find(r"\b(?:p\.?o\.?|purchase order)\s*(?:no\.?|number|#)?\s*[:\-]\s*([A-Za-z0-9/\-]+)", text)),
         "amount_inr": amt,
         "qty": float(_find(r"(?:qty|quantity)\s*[:\-]?\s*([\d.]+)", text) or 0) or None,
         "account_no": _find(r"(?:a/?c|account)\s*(?:no\.?|number)\s*[:\-]?\s*([0-9]{9,18})", text),
@@ -216,10 +218,17 @@ def check_gstin(x, v):
     return chk("gstin_binding", "pass", f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record", ev)
 
 
+def trust_job_id(v):
+    """The cached vendor verdict is keyed by the facts it checked. If the vendor record's name, domain,
+    director or GSTIN changes, the key changes and the vendor is checked again instead of reusing an old CLEAR."""
+    keep = {k: v.get(k) for k in ("legal_name", "domain", "director", "gstin")}
+    return f"trust:{v['vendor_id']}:" + hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:8]
+
+
 def check_trust(v):
-    """Vendor check (5.1 + 5.2) on live data, cached per vendor."""
+    """Vendor check (5.1 + 5.2) on live data, cached per vendor record."""
     req = {"vendor_name": v["legal_name"], "website": v.get("domain"), "director": v.get("director"),
-           "request_id": f"trust:{v['vendor_id']}"}
+           "request_id": trust_job_id(v)}
     try:
         rep = pipeline.run_request(req)
     except (crust.ApiError, OSError, TimeoutError, RuntimeError) as e:
@@ -252,7 +261,9 @@ def draft_bank_verification(v, x):
 # ---------------- orchestration ----------------
 
 def process_file(path, text=None):
-    text = text if text is not None else open(path, encoding="utf-8").read()
+    if text is None:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
     chash = hashlib.sha256(text.encode()).hexdigest()[:16]
     seen = store.db().execute("SELECT * FROM files_seen WHERE source_file=? AND content_hash=?", (path, chash)).fetchone()
     if seen:
@@ -275,9 +286,19 @@ def process_file(path, text=None):
         key = f"{v['vendor_id']}:BANKCHG:{chash}"
         return _finish(path, chash, key, v["vendor_id"], x, "held", checks, draft=draft_bank_verification(v, x))
 
+    if x["doc_type"] == "unknown":
+        # a document from a known vendor that the rules cannot read may still be a bill: a person looks, it is never filed silently
+        key = f"{v['vendor_id']}:unknown:{chash}"
+        return _finish(path, chash, key, v["vendor_id"], x, "held", checks + [chk("doc_type", "fail",
+                       "Could not tell what this document is (no invoice or bill number found). Held for a person rather than filed or paid", weight=50)])
     if x["doc_type"] != "invoice":
         key = f"{v['vendor_id']}:{x['doc_type']}:{chash}"
         return _finish(path, chash, key, v["vendor_id"], x, "rejected", checks + [chk("payable", "fail", f"A {x['doc_type']} is not a payable document; filed, nothing to pay")])
+    missing = [f for f in ("invoice_no", "amount_inr") if not x.get(f)]
+    if missing:
+        key = f"{v['vendor_id']}:unreadable:{chash}"
+        return _finish(path, chash, key, v["vendor_id"], x, "held", checks + [chk("extraction", "fail",
+                       f"Could not read {' and '.join(m.replace('_inr', '').replace('_no', ' number') for m in missing)} from the invoice. Held for a person rather than guessed", weight=50)])
 
     key = f"{v['vendor_id']}:{norm_invoice_no(x['invoice_no'])}"
     dup, orig = check_duplicate(key, x, v)
@@ -403,7 +424,9 @@ def recheck(key):
     before = json.loads(inv["decision_json"])
     if inv["vendor_id"]:
         # drop the cached trust verdict if it ended in an outage, so it is fetched again
-        store.db().execute("DELETE FROM jobs WHERE job_id=? AND status!='done'", (f"trust:{inv['vendor_id']}",))
+        v = vendors().get(inv["vendor_id"])
+        if v:
+            store.db().execute("DELETE FROM jobs WHERE job_id=? AND status!='done'", (trust_job_id(v),))
     with store._lock:
         store.db().execute("DELETE FROM invoices WHERE invoice_key=?", (key,))
         store.db().execute("DELETE FROM files_seen WHERE source_file=?", (inv["source_file"],))

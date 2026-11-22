@@ -149,7 +149,7 @@ class H(BaseHTTPRequestHandler):
             v = ap.vendors().get(r["vendor_id"]) if r["vendor_id"] else None
             pay = store.db().execute("SELECT * FROM payments WHERE idempotency_key=?", (key,)).fetchone()
             ev = [dict(e) for e in store.db().execute(
-                "SELECT * FROM events WHERE job_id IN (?,?,?) ORDER BY id", (f"inv:{os.path.basename(r['source_file'])}", f"inv:{key}", f"trust:{r['vendor_id']}"))]
+                "SELECT * FROM events WHERE job_id IN (?,?,?) ORDER BY id", (f"inv:{os.path.basename(r['source_file'])}", f"inv:{key}", ap.trust_job_id(v) if v else ""))]
             return self._json({"invoice": dict(r), "decision": json.loads(r["decision_json"] or "{}"), "extracted": json.loads(r["extracted_json"]),
                                "vendor": v, "payment": dict(pay) if pay else None, "events": ev})
         if p == "/api/bank":
@@ -163,7 +163,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/vendors":
             out = []
             for v in ap.vendors().values():
-                j = store.get_job(f"trust:{v['vendor_id']}")
+                j = store.get_job(ap.trust_job_id(v))
                 out.append({**v, "trust": j["verdict"] if j else None})
             return self._json(out)
         if p.startswith("/cases/"):
