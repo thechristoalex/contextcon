@@ -47,6 +47,19 @@ HTTP API (for another system to call): `POST /cases`, `GET /cases/<id>`, `GET /a
 | 7 | Invoice from `shadowfaxx.in` (look-alike domain) | Hold | `HELD`: look-alike sender, edit distance 1 |
 | 8 | Kill after approval, before payment | Pay once | Restart → `resume` pays once; second resume and re-approve do nothing |
 
+**Bank-statement lines** (the format of the problem statement's own example), `python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv`:
+
+| Line | Result |
+|---|---|
+| 3 Oct, `RAZ*SWIGGY BLR`, ₹1,240 | Payee **Swiggy** (only one of 3 same-name Crustdata records owns swiggy.com and is an established company). Account: staff meals |
+| 7 Oct, `AWS EMEA`, ₹18,500 | Payee **Amazon Web Services EMEA SARL** (vendor master alias). Account: cloud hosting |
+| 7 Oct, `AWS EMEA`, ₹18,500 | **Held**: same descriptor, amount and date as the line above; possible duplicate charge |
+| 9 Oct, `PAYTM*SHARMA TRD`, ₹4,000 | **Cannot verify**: "SHARMA" matches 4 companies equally; no source identifies the payee. Held for a person |
+| 12 Oct, `NEFT/SHADOWFAX TECHNOLOGIES`, ₹2,36,000 | Shadowfax Technologies Limited. Account: freight, last mile |
+| 14 Oct, `UPI/DELHIVERY`, ₹5,600 | Delhivery (Crustdata). Account: freight, express parcel |
+
+Each line is posted once: re-running the same file posts nothing new.
+
 ## How it works
 
 The architecture diagram is drawn live on the app's **Overview** page (`python3 -m vendorcheck.cli serve`, then open http://127.0.0.1:8080). The same flow as Mermaid:
@@ -81,8 +94,8 @@ flowchart LR
 1. **Resolve the entity by domain, never by name alone.** By name, Crustdata returned a French "SAFEXPRESS" at confidence 1.0 above the Indian Safexpress, and three different "Shadowfax" companies at 1.0. If a name maps to more than one company, the result is `CANNOT_VERIFY` with the candidates listed.
 2. **Company profile** (`/company/enrich`): name, type, year founded, headcount, HQ, founders/CXOs, news. Crustdata's `status` is cited as the dataset's status, not as registry status.
 3. **Website** (`/web/enrich/live`): live, names the company, not parked.
-4. **Registry IDs** (`/web/search/live`): a CIN is accepted only from a result that also names the company. It is cited as a secondary listing, not the MCA registry. If listings show several CINs (for example several TCI group companies), the output says "registry not confirmed" instead of picking one.
-5. **Adverse media.** The company and the director named on the request are screened first, then the leaders on record. Only legal and regulatory terms count (raid, FIR, ED/CBI, NCLT, GST evasion, money laundering); consumer complaints do not. An article counts only if it names the person **and** the company. Otherwise it is cleared as a namesake and the reason is stated. The report shows `hits_found / hits_cleared / hits_escalated`.
+4. **Registry IDs.** A CIN or GSTIN is accepted only if the **fetched page itself** (`/web/enrich/live`) states it next to the company's name. A search snippet is never a source, and search redirect links (`google.com/goto`) cannot be fetched, so they are never cited. If no fetchable page settles it, the output says "registry not confirmed" and why. MCA has no public API, and we do not bypass the portals' CAPTCHAs.
+5. **Adverse media.** The company and the director named on the request are screened first, then the leaders on record. Only legal and regulatory terms count (raid, FIR, ED/CBI, NCLT, GST evasion, money laundering); consumer complaints do not. A hit is escalated only when the **fetched article** names the person **and** the company. If the article cannot be retrieved, it is a "possible match" and is held for a person, never treated as a finding. Results about other people with the same name are cleared as namesakes. **Data minimisation:** for namesakes we keep only the count and the reason, never their names, links or passages. The report shows `hits_found / hits_cleared / hits_escalated`.
 6. **Verdict:** `CLEAR`, `HOLD` (with flags) or `CANNOT_VERIFY` (naming what is missing). The verdict is cached per vendor, so later invoices from the same vendor cost 0 credits.
 
 **Where a person is needed:** every payment, since it cannot be undone (the approver's name is recorded). Every `HELD` item. Sending any drafted message: the system never sends email or contacts anyone.
@@ -96,17 +109,18 @@ flowchart LR
 - **Limits.** Cost limit per job (`MAX_CREDITS_PER_JOB`, default 12 credits) and time limit (`MAX_SECONDS_PER_JOB`, default 180 s). Hitting either gives `CANNOT_VERIFY`, never a guess.
 - **Deterministic.** Extraction and decisions are rules, with no LLM in the decision path, so the same input always gives the same verdict.
 
-## Cost per job (measured)
+## Cost per job and price
 
-| Job | Crustdata calls | Credits | ₹ (at ₹25/credit*) |
-|---|---|---|---|
-| New vendor check (identify, enrich, website, registry search, 3 adverse searches) | 7–8 | 7.2–8.2 | ₹180–205 |
-| Invoice from an already-checked vendor | 0 | 0 | ₹0 (local checks) |
-| Duplicate / bank-change email | 0 | 0 | ₹0 |
+Measured from the cost ledger (every Crustdata call records its `X-Credits-Used`). ₹25 per credit: the event promo gave $4,500 of usage for 15,000 credits, which is $0.30 per credit.
 
-\*The event promo gave $4,500 of usage for 15,000 credits, which is $0.30 per credit, about ₹25. The cost of every call is in the `ledger` table and shown on each case (`python3 -m vendorcheck.cli ledger trust:V001`).
+| Job | Crustdata calls | Measured cost | **Our proposed price** | Gross margin |
+|---|---|---|---|---|
+| New vendor verified (identify, enrich, website, registry, 3 adverse searches, page fetches) | 7–9 | 7.2–9.2 credits = **₹180–230** | **₹1,500** | ~85% |
+| Invoice processed from an already-verified vendor | 0 | **₹0** (local checks; vendor verdict cached) | **₹60** | ~100% before hosting |
+| Bank-statement line posted | 0–1 | **₹0–5** | **₹5** | 0–100% |
+| Duplicate or bank-change email | 0 | ₹0 | included | — |
 
-**Proposed price** (our pricing, not a market quote): per vendor verified, plus per invoice processed, in ₹. The marginal cost is the Crustdata credits above; there are no LLM tokens in the decision path.
+The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay an outsourced accounting firm per invoice or per month, and a KYB vendor per business checked. A typical month of 40 new vendors and 2,000 invoices would cost them **₹1,80,000** with us (40 × ₹1,500 + 2,000 × ₹60), against our measured data cost of about **₹9,200** (40 × ₹230). The prices are our proposal, not a market quote. The LLM cost is ₹0 because there is no LLM in the decision path.
 
 ## Data sources the service calls
 

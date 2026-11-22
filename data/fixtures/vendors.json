@@ -52,5 +52,25 @@
       "phone": "+91-79-000-0003"
     },
     "note": "Fictitious front company (test case 2): papers look fine, no record anywhere."
+  },
+  {
+    "vendor_id": "V004",
+    "legal_name": "Amazon Web Services EMEA SARL",
+    "aliases": [
+      "AWS EMEA",
+      "AWS"
+    ],
+    "domain": "aws.amazon.com",
+    "bank": {
+      "account_no": "000000000000",
+      "ifsc": "CITI0000001",
+      "verified_on": "2026-04-01"
+    },
+    "contact": {
+      "name": "AWS billing",
+      "email": "aws-receivables-support@email.amazon.com",
+      "phone": null
+    },
+    "note": "Existing cloud supplier; bank details fictitious test values."
   }
 ]

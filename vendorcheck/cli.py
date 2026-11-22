@@ -23,6 +23,7 @@ def main(argv=None):
     sub.add_parser("resume")
     v = sub.add_parser("vendor")
     v.add_argument("--name"); v.add_argument("--website"); v.add_argument("--director"); v.add_argument("--gstin"); v.add_argument("--request-id")
+    sub.add_parser("post-bank-lines").add_argument("path")
     sub.add_parser("status"); sub.add_parser("payments")
     sub.add_parser("ledger").add_argument("job_id")
     sub.add_parser("serve").add_argument("--port", type=int, default=8080)
@@ -38,6 +39,9 @@ def main(argv=None):
         out = ap.resume()
     elif x.cmd == "vendor":
         out = pipeline.run_request({"vendor_name": x.name, "website": x.website, "director": x.director, "gstin": x.gstin, "request_id": x.request_id})
+    elif x.cmd == "post-bank-lines":
+        from . import bank
+        out = bank.post_file(x.path)
     elif x.cmd == "status":
         out = [{k: r[k] for k in ("invoice_key", "source_file", "state")} | {"reason": json.loads(r["decision_json"] or "{}").get("reason", "")[:140]} for r in ap.invoices()]
     elif x.cmd == "payments":
