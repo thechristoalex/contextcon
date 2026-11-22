@@ -14,7 +14,7 @@ import time
 import urllib.parse
 from datetime import datetime
 
-from . import crust, jev, store
+from . import crust, gstreg, jev, store
 from .config import ADVERSE_TERMS, CONFIG
 
 SUFFIXES = {"pvt", "private", "ltd", "limited", "llp", "inc", "co", "company", "corp", "corporation",
@@ -414,6 +414,19 @@ class Job:
             else:
                 self.flag("red", f"GSTIN {gstin} fails the format/checksum test, so it is not a real GST number",
                           {"type": "computed", "field": "GSTIN check digit"})
+            if gstin_valid(gstin):
+                reg = gstreg.lookup(gstin, self.id)
+                if reg["ok"] and not reg["registered"]:
+                    self.flag("red", f"GSTIN {gstin} is not registered with GSTN", reg["source"])
+                elif reg["ok"]:
+                    self.fact("GST registration (GSTN)", f"{reg['status']} since {reg.get('registration_date') or 'date not given'}; legal name {reg.get('legal_name')}"
+                              + (f"; trade name {reg['trade_name']}" if reg.get("trade_name") else "") + (f"; {reg['constitution']}" if reg.get("constitution") else ""), reg["source"])
+                    if not reg["active"]:
+                        self.flag("red", f"GST registration {gstin} is {reg['status']} per GSTN", reg["source"])
+                    if name and gstreg.name_matches(reg, name) < 0.5:
+                        self.flag("red", f"GSTIN {gstin} is registered to '{reg.get('legal_name')}', not {name}", reg["source"])
+                elif not reg.get("off"):
+                    self.missing.append(reg["reason"])
 
         res = self.step("resolve", self.s_resolve)
         if not res.get("chosen"):

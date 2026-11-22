@@ -14,7 +14,7 @@ import os
 import re
 import time
 
-from . import crust, jev, pipeline, store
+from . import crust, gstreg, jev, pipeline, store
 from .config import CONFIG
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -330,7 +330,21 @@ def check_gstin(x, v):
         return chk("gstin_binding", "fail", f"GSTIN's PAN is type '{ptype}' ({PAN_TYPES.get(ptype, '?')}) but {v['legal_name']} is a company (expected 'C')", ev, weight=50)
     if g != v.get("gstin"):
         return chk("gstin_binding", "fail", f"Invoice GSTIN {g} differs from the GSTIN on the vendor record {v.get('gstin')}: possible borrowed identity", ev, weight=60)
-    return chk("gstin_binding", "pass", f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record", ev)
+    ok = f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record"
+    reg = gstreg.lookup(g)
+    if not reg["ok"]:
+        # registry off (no key): the local checks stand, as before. Key set but no answer: say so, never guess.
+        return chk("gstin_binding", "pass", ok if reg.get("off") else f"{ok}; {reg['reason']}", ev)
+    ev.append({"source": reg["source"]["api"], "field": "registration", "value": reg.get("status") if reg["registered"] else "not registered",
+               "retrieved_at": reg["source"]["retrieved_at"]})
+    if not reg["registered"]:
+        return chk("gstin_binding", "fail", f"GSTIN {g} passes the check-character test but is not registered with GSTN: not a real GST registration", ev, weight=70)
+    if not reg["active"]:
+        when = f" on {reg['cancellation_date']}" if reg.get("cancellation_date") else ""
+        return chk("gstin_binding", "fail", f"GST registration {g} is {reg['status']}{when} per GSTN: the vendor cannot charge GST on this invoice", ev, weight=70)
+    if gstreg.name_matches(reg, v["legal_name"], trade=False) < 0.5:  # the master holds the legal name
+        return chk("gstin_binding", "fail", f"GSTIN {g} is registered to '{reg.get('legal_name')}', not {v['legal_name']}: possible borrowed identity", ev, weight=60)
+    return chk("gstin_binding", "pass", f"{ok}; registration Active with GSTN since {reg.get('registration_date') or 'date not given'}, registered to {reg.get('legal_name')}", ev)
 
 
 TRUST_CHECK_VERSION = 2  # 2: the GSTIN is looked up on public pages and its PAN holder type is reported
