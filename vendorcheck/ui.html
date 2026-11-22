@@ -214,13 +214,18 @@ const IC={
 const SCREENS=[
  {id:'dash',t:'Dashboard',k:'d',tab:1},{id:'vendors',t:'Vendors',k:'v',tab:1},{id:'inbox',t:'Payments',k:'p',tab:1},{id:'insights',t:'Insights',k:'i',tab:1},
  {id:'ledger',t:'Ledger',k:'l'},{id:'bank',t:'Bank lines',k:'b'},{id:'vcheck',t:'Check a vendor',k:'c'},{id:'activity',t:'Activity',k:'y'},{id:'settings',t:'Settings',k:'s'}];
-const TABOF={dash:'dash',vendors:'vendors',vcheck:'vendors',inbox:'inbox',case:'inbox',ledger:'inbox',bank:'inbox',approvals:'inbox',insights:'insights',activity:'insights',settings:''};
+const TABOF={dash:'dash',vendors:'vendors',vcheck:'vendors',inbox:'inbox',case:'inbox',ledger:'inbox',bank:'inbox',approvals:'inbox',insights:'insights',activity:'insights',settings:'insights'};
 let ROUTE={id:'dash'};
 function drawNav(){const w=INV.filter(r=>r.state==='awaiting_approval').length,h=INV.filter(r=>r.state==='held').length;
   const cnt={inbox:w+h};const on=TABOF[ROUTE.id];
   $('#nav').innerHTML=SCREENS.filter(s=>s.tab).map(s=>`<a data-r="${s.id}" class="${on===s.id?'on':''}" title="g then ${s.k}">${s.t}${cnt[s.id]?`<span class="cnt ${w?'hot':''}">${cnt[s.id]}</span>`:''}</a>`).join('');
   $$('#nav a').forEach(a=>a.onclick=()=>go(a.dataset.r))}
-function topbar(title,{crumb,acts=''}={}){TOP.style.display=title?'':'none';TOP.innerHTML=(crumb?`<div class="crumb">${crumb}<span>/</span></div>`:'')+`<h1>${title}</h1><div class="acts">${acts}</div>`}
+const SUB={inbox:[['inbox','Documents'],['ledger','Ledger'],['bank','Bank lines']],ledger:null,bank:null,
+  vendors:[['vendors','All vendors'],['vcheck','Check a vendor']],vcheck:null,
+  insights:[['insights','Overview'],['activity','Activity log'],['settings','Settings']],activity:null,settings:null};
+function subnav(){const fam=Object.entries(SUB).find(([k,v])=>v&&v.some(x=>x[0]===ROUTE.id));if(!fam)return '';
+  return `<div class="seg" style="margin-left:14px">${fam[1].map(([id,l])=>`<button class="${ROUTE.id===id?'on':''}" onclick="go('${id}')">${l}</button>`).join('')}</div>`}
+function topbar(title,{crumb,acts=''}={}){TOP.style.display=title?'':'none';TOP.innerHTML=subnav()?`<h1>${title}</h1>${subnav()}<div class="acts">${acts}</div>`:'';if(TOP.innerHTML)return;TOP.innerHTML=(crumb?`<div class="crumb">${crumb}<span>/</span></div>`:'')+`<h1>${title}</h1><div class="acts">${acts}</div>`}
 async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
@@ -348,7 +353,7 @@ async function dash(){
 }
 
 async function insights(){
-  topbar('Insights',{acts:`<button class="btn" id="act">Full activity log</button>`});
+  topbar('Insights');
   V.innerHTML='<div style="padding:20px 24px">'+skel(6)+'</div>';
   const [pay,vend,ev]=await Promise.all([api('/api/payments'),api('/api/vendors'),api('/api/events'),refreshInv()]);
   const full=await Promise.all(INV.map(r=>api('/api/invoices/'+encodeURIComponent(r.invoice_key)).catch(()=>null)));
@@ -385,12 +390,12 @@ async function insights(){
     $('#flow').innerHTML=areaChart([{c:'#1f8a63',pts:a.out},{c:'#c27a12',pts:b.out},{c:'#c03a2b',pts:c.out}],{labels:a.lab,fmt:v=>v>=1e5?'₹'+(v/1e5).toFixed(1)+'L':'₹'+Math.round(v/1000)+'k'})+
       `<div class="leg" style="grid-auto-flow:column;justify-content:start;gap:16px;margin-top:6px"><span><i style="background:#1f8a63"></i>Paid or ready</span><span><i style="background:#c27a12"></i>Held</span><span><i style="background:#c03a2b"></i>Duplicate</span></div>`};
   drawFlow(7);$$('#rng button').forEach(b=>b.onclick=()=>{$$('#rng button').forEach(x=>x.classList.toggle('on',x===b));drawFlow(+b.dataset.d)});
-  countUp(V);$('#act').onclick=()=>go('activity');
+  countUp(V);
 }
 
 let FILTER='all', Q='', SEL=0;
 async function inbox(){
-  topbar('Payments',{acts:`<button class="btn" id="toled">Ledger</button><button class="btn" id="tobank">Bank lines</button>`+`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn" id="drop">Add document</button><button class="btn primary" id="proc">Process inbox</button>`});
+  topbar('Payments',{acts:`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn" id="drop">Add document</button><button class="btn primary" id="proc">Process inbox</button>`});
   V.innerHTML=skel();await refreshInv();
   const F={all:['All',()=>true],awaiting_approval:['Needs approval',r=>r.state==='awaiting_approval'],held:['Held',r=>r.state==='held'],paid:['Paid',r=>r.state==='paid'],duplicate:['Duplicate',r=>r.state==='duplicate']};
   const draw=()=>{const rows=INV.filter(F[FILTER][1]).filter(r=>!Q||JSON.stringify(r).toLowerCase().includes(Q));SEL=Math.min(SEL,Math.max(0,rows.length-1));
@@ -409,7 +414,6 @@ async function inbox(){
   draw();
   $$('[data-f]').forEach(b=>b.onclick=()=>{FILTER=b.dataset.f;SEL=0;$$('[data-f]').forEach(x=>x.classList.toggle('on',x===b));draw()});
   $('#q').oninput=e=>{Q=e.target.value.toLowerCase();SEL=0;draw()};
-  $('#toled').onclick=()=>go('ledger');$('#tobank').onclick=()=>go('bank');
   wireScan();
   $('#drop').onclick=()=>{const z=$('#dz');z.style.display=z.style.display==='none'?'block':'none';$('#txt').focus()};
   $('#send').onclick=e=>busy(e.currentTarget,'Checking…',async()=>{const r=await api('/api/upload',{name:$('#fname').value||('upload_'+Date.now()+'.txt'),text:$('#txt').value});toast(`${esc(r.invoice_key||'Document')}: ${esc(LBL[r.state]||r.state||r.outcome)}`);go('case',r.invoice_key)});
@@ -581,7 +585,7 @@ async function vendorDrawer(id){const D=$('#drawer');D.innerHTML='<div class="db
 }
 window.vendorDrawer=vendorDrawer;
 async function vcheck(pre){
-  topbar('Check a vendor',{crumb:'<a onclick="go(\'vendors\')">Vendors</a>'});
+  topbar('Vendors');
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Is this a real, trading business, who runs it, how long has it existed, and is anything off. Live sources, every fact cited.</p>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px"><input id="vn" placeholder="Vendor name" value="${esc(pre?.n||'')}" style="width:240px"><input id="vw" placeholder="Website" value="${esc(pre?.w||'')}" style="width:200px"><input id="vd" placeholder="Director (optional)" value="${esc(pre?.d||'')}" style="width:200px"><button class="btn primary" id="go">Run check</button></div><div id="out"></div>`;
   $('#go').onclick=e=>busy(e.currentTarget,'Checking live sources…',async()=>{$('#out').innerHTML=skel(5);
@@ -597,7 +601,7 @@ async function vcheck(pre){
 
 const SAMPLE='date,description,amount\n3 Oct 2026,RAZ*SWIGGY BLR,1240\n7 Oct 2026,AWS EMEA,18500\n7 Oct 2026,AWS EMEA,18500\n9 Oct 2026,PAYTM*SHARMA TRD,4000';
 async function bank(){
-  topbar('Bank lines',{crumb:'<a onclick="go(\'inbox\')">Payments</a>'});
+  topbar('Payments');
   const res=r=>({POSTED:'paid',HELD:'held',CANNOT_VERIFY:'rejected'}[r]||'none');
   const lab=r=>({POSTED:'Posted',HELD:'Held',CANNOT_VERIFY:'Cannot verify'}[r]||r);
   const table=rows=>`<div class="tblwrap"><table class="tbl"><thead><tr><th>Result</th><th>Date</th><th>Bank line</th><th class="r">Amount</th><th>Payee</th><th>Account</th><th>Why</th></tr></thead><tbody>${rows.map((l,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td><span class="st ${res(l.result)}">${ICON[res(l.result)]||ICON.none}<span class="t">${esc(lab(l.result))}</span></span></td><td>${esc(l.date)}</td><td class="mono">${esc(l.description)}</td><td class="r mono num">${inr(l.amount_inr)}</td><td>${esc(l.payee||'—')}</td><td>${esc(l.account||'—')}</td><td class="f2" title="${esc(l.reason)}">${esc(l.reason)}</td></tr>`).join('')||'<tr><td colspan="7"><div class="empty"><b>No lines posted yet</b>Paste a statement above.</div></td></tr>'}</tbody></table></div>`;
@@ -611,7 +615,7 @@ async function bank(){
 }
 
 async function ledger(){
-  topbar('Ledger',{crumb:'<a onclick="go(\'inbox\')">Payments</a>'});V.innerHTML=skel();const p=await api('/api/payments');
+  topbar('Payments');V.innerHTML=skel();const p=await api('/api/payments');
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Simulated payment rails. One row per invoice: the idempotency key is the primary key, so a retry, restart or second approval cannot add a row.</p>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>Paid</th><th>Payee</th><th>Account</th><th class="r">Amount</th><th>Approved by</th><th>Reference</th><th>Idempotency key</th></tr></thead><tbody>
   ${p.map((r,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td class="f2" title="${tsf(r.paid_at)}">${ago(r.paid_at)}</td><td>${esc(r.payee)}</td><td class="mono" title="IFSC ${esc(r.ifsc)}">${esc(r.account)}</td><td class="r mono num">${inr(r.amount_inr)}</td><td class="mono">${esc(r.approved_by)}</td><td class="mono"><span class="copy" data-copy="${esc(r.ref)}">${esc(r.ref)}</span></td><td class="mono f3"><span class="copy" data-copy="${esc(r.idempotency_key)}">${esc(r.idempotency_key)}</span></td></tr>`).join('')||'<tr><td colspan="7"><div class="empty"><b>No payments yet</b>Approve a ready invoice to pay it.</div></td></tr>'}</tbody>
@@ -620,7 +624,7 @@ async function ledger(){
 }
 
 async function activity(){
-  topbar('Activity',{crumb:'<a onclick="go(\'insights\')">Insights</a>'});V.innerHTML=skel(10);const e=await api('/api/events');
+  topbar('Insights');V.innerHTML=skel(10);const e=await api('/api/events');
   V.innerHTML=`<div class="chips"><input class="search" id="aq" placeholder="Filter events…" style="margin-left:0"></div>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>Time</th><th>Job</th><th>Event</th></tr></thead><tbody id="at"></tbody></table></div>`;
   const draw=q=>{$('#at').innerHTML=e.filter(r=>!q||(r.msg+(r.job_id||'')).toLowerCase().includes(q)).map(r=>`<tr><td class="mono f3">${tsf(r.at)}</td><td class="mono">${esc(r.job_id||'—')}</td><td style="${r.level==='error'?'color:var(--bad)':r.level==='warn'?'color:var(--held)':''}" title="${esc(r.msg)}">${esc(r.msg)}</td></tr>`).join('')};
@@ -628,7 +632,7 @@ async function activity(){
 }
 
 async function settings(){
-  topbar('Settings');const s=await api('/api/settings');
+  topbar('Insights');const s=await api('/api/settings');
   const f=[['max_credits_per_job','Cost limit per job','Crustdata credits. A job that reaches it stops and says cannot verify.'],['max_seconds_per_job','Time limit per job','Seconds.'],['auto_approve_below_inr','Auto-approve payments below','₹. 0 means every payment needs a person.'],['min_age_years','Flag companies younger than','Years.'],['min_headcount','Flag headcount below','People.'],['min_read_confidence','Hold a scanned bill when a field is read below','Confidence, 0 to 1. A person compares that field with the photo.']];
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Limits and approval policy for every run. Changes apply to the next job and are written to the activity log.</p>
   <div style="max-width:640px"><div class="field"><div><div class="h">Approver name</div><div class="d">Recorded on every payment you approve.</div></div><input id="s_approver_name" value="${esc(s.approver_name||'AP lead')}"></div>${f.map(([k,l,d])=>`<div class="field"><div><div class="h">${l}</div><div class="d">${d}</div></div><input id="s_${k}" class="num" value="${esc(s[k])}"></div>`).join('')}
