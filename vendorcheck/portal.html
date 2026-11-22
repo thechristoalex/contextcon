@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vendor Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css?v=3">
+<link rel="stylesheet" href="/static/procure.css?v=1">
+<style>
+.steps{display:flex;gap:0;margin:0 0 20px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;flex-wrap:wrap}
+.steps span{flex:1;min-width:110px;padding:10px 12px;font-size:12px;color:var(--fg-3);border-right:1px solid var(--line);background:var(--bg-sub)}
+.steps span:last-child{border-right:0}.steps span.on{color:var(--fg);background:var(--bg);font-weight:600;box-shadow:inset 0 -2px 0 var(--blue)}.steps span.done{color:var(--paid)}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px;max-width:760px}
+.form label{display:grid;gap:4px;font-size:12px;color:var(--fg-2)}.form .w{grid-column:1/-1}
+.drop{border:1.5px dashed var(--line-2);border-radius:var(--r-lg);padding:28px;text-align:center;color:var(--fg-2);margin-bottom:14px;transition:all var(--fast)}
+.drop.on{border-color:var(--blue);background:var(--blue-soft)}
+@media (max-width:700px){.form{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><svg width="20" height="18" viewBox="0 0 26 22" fill="none" stroke="#384ce3" stroke-width="2"><path d="M13 2 24 7 13 12 2 7z"/><path d="M2 11.5 13 16.5 24 11.5"/><path d="M2 15.5 13 20.5 24 15.5"/></svg>Vendor Portal</div>
+    <nav class="nav" id="nav"></nav>
+    <div class="me"><div class="avatar" id="av">·</div><div class="who" id="who">…</div></div>
+  </aside>
+  <section class="main"><div class="top" id="top"></div><div class="view" id="view"></div></section>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];const V=$('#view'),TOP=$('#top');
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const inr=n=>n==null?'—':'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const nice=s=>String(s||'').replace(/_/g,' ');const ZS=s=>`<span class="zst ${esc(s)}">${esc(nice(s))}</span>`;
+const T=new URLSearchParams(location.hash.slice(1)).get('t')||'';
+function toast(m,k='ok'){const t=document.createElement('div');t.className='toast '+k;t.innerHTML=`<span>${m}</span>`;$('#toasts').appendChild(t);setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),300)},3200)}
+async function api(p,b){const r=await fetch(p+(b?'':(p.includes('?')?'&':'?')+'t='+encodeURIComponent(T)),b?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...b,t:T})}:{});
+  const j=await r.json();if(r.status>=400){const e=new Error(j.error||'HTTP '+r.status);e.data=j;throw e}return j}
+let ME=null,ROUTE='home';
+const NAV=[['home','Home'],['invoices','Invoices'],['payments','Payments Received'],['profile','Organisation Details']];
+function nav(){$('#nav').innerHTML='<div class="grp lbl">Portal</div>'+NAV.filter(([k])=>ME.status==='active'||k==='profile').map(([k,t])=>`<a data-r="${k}" class="${ROUTE===k?'on':''}">${t}</a>`).join('');$$('#nav a').forEach(a=>a.onclick=()=>go(a.dataset.r))}
+function topbar(t,acts=''){TOP.innerHTML=`<h1>${esc(t)}</h1><div class="acts">${acts}</div>`}
+async function go(r){ROUTE=r;ME=await api('/api/portal/me');$('#who').textContent=ME.legal_name||ME.display_name;$('#av').textContent=(ME.display_name||'V')[0];nav();
+  try{await ({home,invoices,payments,profile})[r]()}catch(e){V.innerHTML=`<div class="empty"><b>Could not load</b>${esc(e.message)}</div>`}}
+
+/* ---------- sign-up / organisation details (Business, Address, Bank, Other, Preview) ---------- */
+const STEPS=[['Business Details',[['legal_name','Legal name*'],['gstin','GSTIN*'],['website','Website'],['director','Director / proprietor'],['currency','Currency'],['contact_name','Primary contact'],['phone','Phone']]],
+ ['Address Details',[['billing_address','Billing address*','w'],['shipping_address','Shipping address (optional)','w']]],
+ ['Bank Details',[['bank_account','Account number*'],['ifsc','IFSC*'],['bank_holder','Account holder name*','w']]],
+ ['Preview Details',[]]];
+let STEP=0,DRAFT={};
+async function profile(){
+  const editable=ME.can_edit;const active=ME.status==='active';
+  if(!Object.keys(DRAFT).length)DRAFT=Object.fromEntries(STEPS.flatMap(s=>s[1]).map(([k])=>[k,ME[k]||(k==='currency'?'INR':'')]));
+  topbar(active?'Organisation Details':'Sign up: organisation details');
+  const banner={invited:['zinfo','Fill in your organisation details and submit them for approval. You can upload invoices once they are approved.'],
+   approval_pending:['zinfo','Submitted. Waiting for the buyer to review your details.'],
+   pending_review:['zerr','The buyer asked for more details: '+(ME.reason||'')],
+   rejected:['zerr','Your application was rejected: '+(ME.reason||'')],
+   active:['zinfo','Approved. Changing your bank details sends your profile back for approval; payments pause until the buyer confirms the change with you by phone.'],
+   inactive:['zerr','Your vendor account is inactive.'],cancelled:['zerr','This invitation was cancelled.']}[ME.status]||['zinfo',''];
+  if(!editable||ME.status==='approval_pending'){STEP=3}
+  const fields=STEPS[STEP][1];
+  V.innerHTML=`<div class="${banner[0]}" style="margin-bottom:16px;max-width:760px">${esc(banner[1])}</div>
+   <div class="steps">${STEPS.map((s,i)=>`<span class="${i===STEP?'on':i<STEP?'done':''}">${i+1}. ${s[0]}</span>`).join('')}</div>
+   ${STEP<3?`<div class="form">${fields.map(([k,l,w])=>`<label class="${w||''}">${l}${k.includes('address')?`<textarea name="${k}" rows="3">${esc(DRAFT[k])}</textarea>`:`<input name="${k}" value="${esc(DRAFT[k])}" ${active&&!['bank_account','ifsc','bank_holder'].includes(k)?'disabled':''} ${['gstin','ifsc'].includes(k)?'style="text-transform:uppercase"':''}>`}</label>`).join('')}</div>`
+    :`<div style="max-width:760px">${STEPS.slice(0,3).map(s=>`<div class="sec"><span class="lbl">${s[0]}</span></div><div class="zgrid">${s[1].map(([k,l])=>`<div class="zkv"><span class="k">${esc(l.replace('*',''))}</span><span class="v">${esc(DRAFT[k])||'<span class="f3">—</span>'}</span></div>`).join('')}</div>`).join('')}</div>`}
+   <div id="err" style="max-width:760px;margin-top:12px"></div>
+   <div style="display:flex;gap:8px;margin-top:16px">${STEP>0&&editable&&ME.status!=='approval_pending'?'<button class="btn" id="back">Back</button>':''}
+   ${STEP<3&&editable?'<button class="btn primary" id="next">Save and Next</button>':''}${STEP===3&&editable&&ME.status!=='approval_pending'?`<button class="btn accent" id="sub">${active?'Submit bank change for approval':'Submit for Approval'}</button>`:''}</div>`;
+  const keep=()=>$$('.form [name]').forEach(i=>DRAFT[i.name]=i.value.trim());
+  $('#back')&&($('#back').onclick=()=>{keep();STEP--;profile()});
+  $('#next')&&($('#next').onclick=()=>{keep();const miss=fields.filter(([k,l])=>l.includes('*')&&!DRAFT[k]);if(miss.length){$('#err').innerHTML=`<div class="zerr">Required: ${miss.map(m=>m[1].replace('*','')).join(', ')}</div>`;return}STEP++;profile()});
+  $('#sub')&&($('#sub').onclick=async()=>{try{await api('/api/portal/profile',active?{bank_account:DRAFT.bank_account,ifsc:DRAFT.ifsc,bank_holder:DRAFT.bank_holder}:DRAFT);toast('Submitted for approval');STEP=0;go('profile')}catch(e){$('#err').innerHTML=`<div class="zerr">${esc(e.message)}</div>`}});
+}
+
+/* ---------- home ---------- */
+async function home(){
+  topbar('Home');const d=await api('/api/portal/invoices');const open=d.invoices.filter(b=>['open','partially_paid','overdue'].includes(b.display_status));
+  const last=d.payments_received[0];
+  V.innerHTML=`<div class="kpis" style="grid-template-columns:repeat(3,1fr)"><div class="kpi"><span class="lbl">Balance due to you</span><div class="v">${inr(open.reduce((s,b)=>s+b.balance,0))}</div><div class="s">${open.length} open invoice(s)</div></div>
+   <div class="kpi"><span class="lbl">Last payment received</span><div class="v">${last?inr(last.amount):'—'}</div><div class="s">${last?esc(last.payment_date+' · '+(last.bank_ref||'')):'none yet'}</div></div>
+   <div class="kpi"><span class="lbl">Awaiting buyer review</span><div class="v">${(await api('/api/portal/documents')).filter(x=>x.status==='pending').length}</div><div class="s">uploaded documents</div></div></div>
+   <div class="sec"><span class="lbl">Vendor details</span></div><div class="zgrid" style="max-width:760px"><div class="zkv"><span class="k">Legal name</span><span class="v">${esc(ME.legal_name)}</span></div><div class="zkv"><span class="k">GSTIN</span><span class="v mono">${esc(ME.gstin)}</span></div><div class="zkv"><span class="k">Bank account</span><span class="v mono">${esc(ME.bank_account)} · ${esc(ME.ifsc)}</span></div><div class="zkv"><span class="k">Status</span><span class="v">${ZS(ME.status)}</span></div></div>`;
+}
+
+/* ---------- invoices: bills sent to you + Uploaded Documents ---------- */
+let TAB='uploaded',SHOW='all';
+async function invoices(){
+  topbar('Invoices',`<label class="btn primary" style="cursor:pointer">Upload Documents<input type="file" id="f" accept=".pdf,image/*,.txt" hidden></label>`);
+  const [d,docs]=await Promise.all([api('/api/portal/invoices'),api('/api/portal/documents')]);
+  const F={all:()=>true,overdue:b=>b.display_status==='overdue',paid:b=>b.status==='paid',partially_paid:b=>b.status==='partially_paid'};
+  V.innerHTML=`<div class="chips"><button class="chip ${TAB==='uploaded'?'on':''}" data-t="uploaded">Uploaded Documents<b>${docs.length}</b></button><button class="chip ${TAB==='invoices'?'on':''}" data-t="invoices">Invoices<b>${d.invoices.length}</b></button>
+   ${TAB==='invoices'?`<select class="zsel" id="show" style="margin-left:auto">${[['all','All'],['overdue','Overdue'],['paid','Paid'],['partially_paid','Partially Paid']].map(([k,l])=>`<option value="${k}" ${SHOW===k?'selected':''}>${l}</option>`).join('')}</select>`:''}</div>
+   ${TAB==='uploaded'?`<div class="drop" id="drop"><b>Drag and drop an invoice here</b><div class="f3">PDF or image, up to 5 MB. Type the invoice number and amount below if the file is a scan.</div>
+     <div class="form" style="margin:14px auto 0;text-align:left"><label>Invoice#<input id="ino"></label><label>Amount (₹)<input id="iamt" inputmode="decimal"></label><label>PO#<input id="ipo"></label><label>Due date<input id="idue" type="date"></label></div></div>
+     <div class="tblwrap"><table class="tbl"><thead><tr><th>Document</th><th>Invoice#</th><th class="r">Amount</th><th>Invoice UUID</th><th>Status</th><th>Note from buyer</th></tr></thead><tbody>
+     ${docs.map(x=>`<tr><td><b>${esc(x.file_name)}</b></td><td class="mono">${esc(x.extracted.invoice_no||'—')}</td><td class="r mono">${inr(x.extracted.amount_inr)}</td><td><span class="zuuid" title="${esc(x.invoice_uuid)}">${esc((x.invoice_uuid||'—').slice(0,8))}</span></td><td>${ZS(x.status)}</td><td class="f2">${esc(x.reason||(x.status==='pending'?x.checks.filter(c=>c.result==='fail').map(c=>c.reason).join('; '):''))}</td></tr>`).join('')||'<tr><td colspan="6"><div class="empty"><b>No documents uploaded</b></div></td></tr>'}</tbody></table></div>`
+   :`<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Invoice#</th><th>Status</th><th>Due date</th><th class="r">Amount</th><th class="r">Balance</th></tr></thead><tbody>
+     ${d.invoices.filter(F[SHOW]).map(b=>`<tr><td class="f2">${esc(b.bill_date||'—')}</td><td class="mono">${esc(b.bill_no)}</td><td>${ZS(b.display_status)}</td><td class="f2">${esc(b.due_date||'—')}</td><td class="r mono">${inr(b.amount)}</td><td class="r mono">${inr(b.balance)}</td></tr>`).join('')||'<tr><td colspan="6"><div class="empty"><b>No invoices</b></div></td></tr>'}</tbody></table></div>`}`;
+  $$('[data-t]').forEach(c=>c.onclick=()=>{TAB=c.dataset.t;invoices()});$('#show')&&($('#show').onchange=e=>{SHOW=e.target.value;invoices()});
+  const send=async file=>{if(!file)return;if(file.size>5*1024*1024)return toast('Files must be 5 MB or smaller','err');
+    const data=await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(file)});
+    try{const r=await api('/api/portal/documents',{name:file.name,data,invoice_no:$('#ino')?.value||null,amount_inr:$('#iamt')?.value?+$('#iamt').value:null,po_no:$('#ipo')?.value||null,due_date:$('#idue')?.value||null});
+      toast(r.deduplicated?'This file was already uploaded':'Uploaded. Invoice UUID '+esc((r.document.invoice_uuid||'').slice(0,8)));TAB='uploaded';invoices()}catch(e){toast(esc(e.message),'err')}};
+  $('#f').onchange=e=>send(e.target.files[0]);
+  const dz=$('#drop');if(dz){dz.ondragover=e=>{e.preventDefault();dz.classList.add('on')};dz.ondragleave=()=>dz.classList.remove('on');dz.ondrop=e=>{e.preventDefault();dz.classList.remove('on');send(e.dataTransfer.files[0])}}
+}
+
+async function payments(){
+  topbar('Payments Received');const d=await api('/api/portal/invoices');
+  V.innerHTML=`<div class="tblwrap"><table class="tbl"><thead><tr><th>Date</th><th>Payment#</th><th>Invoices</th><th>Mode</th><th>Bank reference</th><th class="r">Amount</th></tr></thead><tbody>
+   ${d.payments_received.map(p=>`<tr><td class="f2">${esc(p.payment_date)}</td><td class="mono">${esc(p.payment_no)}</td><td class="mono f2">${p.allocations.map(a=>esc(a.bill_no)).join(', ')}</td><td class="f2">${esc(p.mode)}</td><td class="mono">${esc(p.bank_ref||'')}</td><td class="r mono">${inr(p.amount)}</td></tr>`).join('')||'<tr><td colspan="6"><div class="empty"><b>No payments received yet</b></div></td></tr>'}</tbody></table></div>`;
+}
+
+(async()=>{if(!T){V.innerHTML='<div class="empty"><b>Open the invitation link</b>This page needs the link from your invitation email.</div>';return}
+  try{ME=await api('/api/portal/me');go(ME.status==='active'?'home':'profile')}catch(e){V.innerHTML=`<div class="empty"><b>Invitation link not valid</b>${esc(e.message)}</div>`}})();
+</script>
+</body>
+</html>

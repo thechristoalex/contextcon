@@ -14,7 +14,7 @@ import os
 import re
 import time
 
-from . import crust, jev, pipeline, store
+from . import crust, gstreg, jev, pipeline, store
 from .config import CONFIG
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -26,8 +26,17 @@ def load(name):
         return json.load(f)
 
 
+def fixture_vendors():
+    return load("vendors.json")
+
+
 def vendors():
-    return {v["vendor_id"]: v for v in load("vendors.json")}
+    """The vendor master: the client's file, plus vendors approved through onboarding (procure service)."""
+    out = {v["vendor_id"]: v for v in fixture_vendors()}
+    from .procure import onboarding
+    for v in onboarding.active_master():
+        out.setdefault(v["vendor_id"], v)
+    return out
 
 
 def vendor_hash(v):
@@ -254,7 +263,8 @@ def check_duplicate(key, x, v):
     # same vendor, same amount, same date, different number -> likely re-issued duplicate
     for r in store.db().execute("SELECT invoice_key, extracted_json, state FROM invoices WHERE vendor_id=?", (v["vendor_id"],)):
         e = json.loads(r["extracted_json"])
-        if e.get("amount_inr") == x.get("amount_inr") and e.get("invoice_date") == x.get("invoice_date") and e.get("po_no") == x.get("po_no") and r["state"] not in ("rejected",):
+        # a row already marked duplicate is a copy, never the original: replaying the original must not match its own copy
+        if e.get("amount_inr") == x.get("amount_inr") and e.get("invoice_date") == x.get("invoice_date") and e.get("po_no") == x.get("po_no") and r["state"] not in ("rejected", "duplicate"):
             return chk("duplicate", "fail", f"Same vendor, amount ₹{x.get('amount_inr'):,.2f}, date {x.get('invoice_date')} and PO as invoice {r['invoice_key']} (state {r['state']}): a re-issued duplicate under a new number.",
                        [{"source": "invoice ledger", "field": "invoice_key", "value": r["invoice_key"]}], weight=100), r["invoice_key"]
     return chk("duplicate", "pass", "No earlier invoice with this number, or with the same vendor, amount, date and PO", weight=0), None
@@ -320,7 +330,21 @@ def check_gstin(x, v):
         return chk("gstin_binding", "fail", f"GSTIN's PAN is type '{ptype}' ({PAN_TYPES.get(ptype, '?')}) but {v['legal_name']} is a company (expected 'C')", ev, weight=50)
     if g != v.get("gstin"):
         return chk("gstin_binding", "fail", f"Invoice GSTIN {g} differs from the GSTIN on the vendor record {v.get('gstin')}: possible borrowed identity", ev, weight=60)
-    return chk("gstin_binding", "pass", f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record", ev)
+    ok = f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record"
+    reg = gstreg.lookup(g)
+    if not reg["ok"]:
+        # registry off (no key): the local checks stand, as before. Key set but no answer: say so, never guess.
+        return chk("gstin_binding", "pass", ok if reg.get("off") else f"{ok}; {reg['reason']}", ev)
+    ev.append({"source": reg["source"]["api"], "field": "registration", "value": reg.get("status") if reg["registered"] else "not registered",
+               "retrieved_at": reg["source"]["retrieved_at"]})
+    if not reg["registered"]:
+        return chk("gstin_binding", "fail", f"GSTIN {g} passes the check-character test but is not registered with GSTN: not a real GST registration", ev, weight=70)
+    if not reg["active"]:
+        when = f" on {reg['cancellation_date']}" if reg.get("cancellation_date") else ""
+        return chk("gstin_binding", "fail", f"GST registration {g} is {reg['status']}{when} per GSTN: the vendor cannot charge GST on this invoice", ev, weight=70)
+    if gstreg.name_matches(reg, v["legal_name"], trade=False) < 0.5:  # the master holds the legal name
+        return chk("gstin_binding", "fail", f"GSTIN {g} is registered to '{reg.get('legal_name')}', not {v['legal_name']}: possible borrowed identity", ev, weight=60)
+    return chk("gstin_binding", "pass", f"{ok}; registration Active with GSTN since {reg.get('registration_date') or 'date not given'}, registered to {reg.get('legal_name')}", ev)
 
 
 TRUST_CHECK_VERSION = 2  # 2: the GSTIN is looked up on public pages and its PAN holder type is reported
@@ -403,9 +427,14 @@ def check_unknown_vendor(x):
                     "Not the same as 'no record'; held until it can be checked", weight=50)], None
     ev = [{"claim": f["claim"], "value": f["value"], "source": f["source"]} for f in rep["facts"]]
     who = (rep.get("entity") or {}).get("name") or req["vendor_name"] or req["website"]
+    sender = x.get("sender_domain")
+    printed = req["website"] and req["website"] == x.get("website_text") and (not sender or sender in FREE_MAIL)
+    # a website printed on a bill is the bill's own claim: anyone can print www.bigcompany.com on a fake invoice
+    caveat = (f" The website {req['website']} was printed on the bill, so this shows the company exists, not that the bill came from it: "
+              "confirm on a number from the company's own website before adding it.") if printed else ""
     if rep["verdict"] == "CLEAR":
         out = [chk("background_check", "warn", f"{who} appears to be a real, active company ({rep['summary']}), but it is not a vendor on file. "
-                   "Add it to the vendor master before paying", ev)]
+                   "Add it to the vendor master before paying." + caveat, ev)]
     else:
         why = "; ".join([f["reason"] for f in rep["flags"]] + rep["cannot_verify"]) or rep["summary"]
         out = [chk("background_check", "fail", f"Background check on {who}: {rep['verdict'].replace('_', ' ').lower()}. {why}", ev, weight=20)]

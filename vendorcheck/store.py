@@ -14,7 +14,7 @@ import time
 
 DB_PATH = os.environ.get("VENDORCHECK_DB", os.path.join(os.path.dirname(__file__), "..", "data", "vendorcheck.db"))
 
-_lock = threading.Lock()
+_lock = threading.RLock()  # reentrant: a read inside a write transaction on the same thread must not deadlock
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (
@@ -111,23 +111,34 @@ CREATE TABLE IF NOT EXISTS events (
 """
 
 
-def connect():
+def connect(schema=True):
     os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.executescript(SCHEMA)
+    conn.execute("PRAGMA busy_timeout=30000")
+    if schema:  # once per process; later per-thread connections reuse the file as created
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.executescript(SCHEMA)
     return conn
 
 
-_conn = None
+_conn = None          # this process's first connection; tests set it to None to switch DB_PATH
+_gen = 0              # bumped whenever _conn is reset, so every thread reconnects to the new file
+_local = threading.local()
 
 
 def db():
-    global _conn
+    """A connection for the calling thread. One shared connection let a reader on one thread run inside another
+    thread's open write transaction (a row that exists read as missing), so each thread gets its own. SQLite's WAL
+    mode lets them read concurrently; writers queue on the busy timeout and on _lock."""
+    global _conn, _gen
     if _conn is None:
+        _gen += 1
         _conn = connect()
-    return _conn
+        _local.conn, _local.gen = _conn, _gen
+    if getattr(_local, "gen", None) != _gen:
+        _local.conn, _local.gen = connect(schema=False), _gen
+    return _local.conn
 
 
 def log(job_id, msg, level="info"):
