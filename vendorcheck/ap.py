@@ -311,8 +311,9 @@ def trust_job_id(v):
 
 def check_trust(v):
     """Vendor check (5.1 + 5.2) on live data, cached per vendor record."""
+    # the vendor master's GSTIN (not the bill's: check_gstin compares those) so the GSTIN is checked against public pages
     req = {"vendor_name": v["legal_name"], "website": v.get("domain"), "director": v.get("director"),
-           "request_id": trust_job_id(v)}
+           "gstin": v.get("gstin"), "request_id": trust_job_id(v)}
     try:
         rep = pipeline.run_request(req)
     except (crust.ApiError, OSError, TimeoutError, RuntimeError) as e:

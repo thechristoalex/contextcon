@@ -71,3 +71,39 @@ class GstinProfileTest(TempStore):
         self.assertEqual(facts["PAN holder type"]["value"], "individual")
         self.assertEqual(facts["PAN holder type"]["source"]["type"], "computed")
         self.assertTrue(any(f["severity"] == "amber" and "individual" in f["reason"] for f in rep["flags"]))
+
+
+class FakeVendorCheck:
+    """Stands in for pipeline.run_request: records each request and returns a report with the given verdict."""
+
+    def __init__(self, verdict="CLEAR", entity="Delhivery Limited", flags=None, error=None):
+        self.verdict, self.entity, self.flags, self.error, self.calls = verdict, entity, flags or [], error, []
+
+    def __call__(self, req):
+        self.calls.append(req)
+        if self.error:
+            raise self.error
+        return {"job_id": req.get("request_id"), "request": req, "verdict": self.verdict,
+                "summary": f"{self.entity}: {self.verdict}", "entity": {"id": 1, "name": self.entity} if self.entity else None,
+                "facts": [{"claim": "Matched company record", "value": f"{self.entity} (crustdata_company_id 1)",
+                           "source": {"api": "/company/identify", "retrieved_at": "2026-11-22"}}],
+                "flags": self.flags, "cannot_verify": [] if self.verdict == "CLEAR" else ["no registry record"],
+                "screening": {"hits_found": 0, "hits_cleared": 0, "hits_escalated": 0}, "decisions": [],
+                "cost": {"credits": 9.2, "inr": 230.0}}
+
+
+class PatchedCheck(TempStore):
+    def use(self, fake):
+        self.fake = fake
+        self.real_run = pipeline.run_request
+        pipeline.run_request = fake
+        self.addCleanup(setattr, pipeline, "run_request", self.real_run)
+        return fake
+
+
+class KnownVendorTest(PatchedCheck):
+    def test_vendor_master_gstin_reaches_the_vendor_check(self):
+        fake = self.use(FakeVendorCheck(entity="Shadowfax Technologies Limited"))
+        ap.process_file(os.path.join(ap.FIX, "inbox", "01_shadowfax_invoice.txt"))
+        req = next(r for r in fake.calls if r["vendor_name"] == "Shadowfax Technologies Limited")
+        self.assertEqual(req["gstin"], ap.vendors()["V001"]["gstin"])
