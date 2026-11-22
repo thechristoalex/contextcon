@@ -155,7 +155,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/bank":
             from . import bank
             store.db().execute(bank.SCHEMA)
-            return self._json([dict(r) for r in store.db().execute("SELECT * FROM bank_postings ORDER BY at DESC, line_no")])
+            return self._json([dict(r) for r in store.db().execute("SELECT * FROM bank_lines ORDER BY at DESC, line_no")])
         if p == "/api/payments":
             return self._json(ap.payments())
         if p == "/api/events":
