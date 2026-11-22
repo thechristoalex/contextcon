@@ -125,6 +125,18 @@ Offline tests (no key, no credits): `python3 -m unittest tests.test_procure -v`.
 - six concurrent payments for one bill, of which exactly one is recorded
 - a bank change between approval and transfer
 
+## Diagrams (public links for the submission form)
+
+| Diagram | Public link |
+|---|---|
+| System architecture (components, data stores, external calls) | https://github.com/thechristoalex/contextcon/blob/main/docs/system-context.png |
+| Agent flow (invoice and bank-line paths, checks, approval, pay once) | https://github.com/thechristoalex/contextcon/blob/main/docs/agent-flow.png |
+| Invoice state machine (exactly-once payment) | https://github.com/thechristoalex/contextcon/blob/main/docs/invoice-state-machine.png |
+| Vendor check pipeline (5.1 + 5.2) | https://github.com/thechristoalex/contextcon/blob/main/docs/vendor-check.png |
+| Business value chain | https://github.com/thechristoalex/contextcon/blob/main/docs/value-chain.png |
+
+![System architecture](docs/system-context.png)
+
 ## How it works
 
 **Full technical and business architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). It covers the system context, modules, SQLite tables and keys, the invoice state machine, check weights, the vendor-check pipeline, external calls with costs and retries, kill and restart safety, the API, scaling, the value chain, buyer, pricing and unit economics, controls and roadmap.
