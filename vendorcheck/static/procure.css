@@ -6,7 +6,8 @@
 .zst.pending_review,.zst.draft,.zst.overdue{color:var(--held)}
 .zst.rejected,.zst.void,.zst.cancelled,.zst.inactive{color:var(--bad)}
 .zlist{display:grid;grid-template-columns:minmax(0,1fr);gap:0;border:1px solid var(--line);border-radius:var(--r);min-height:420px}
-.zlist.split{grid-template-columns:minmax(280px,38%) minmax(0,1fr)}
+.zlist.split{grid-template-columns:minmax(300px,36%) minmax(0,1fr)}
+.zlist.split .l .pill{display:none}
 .zlist .l{min-width:0;overflow:auto;border-right:1px solid var(--line)}
 .zlist:not(.split) .l{border-right:0}
 .zlist .d{min-width:0;overflow:auto;display:none}
@@ -51,3 +52,7 @@
 .zsub a{padding:8px 12px;color:var(--fg-2);font-weight:500;cursor:pointer;white-space:nowrap;position:relative}
 .zsub a:hover{color:var(--fg)}
 .zsub a.on{color:var(--fg)}.zsub a.on:after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--blue);border-radius:2px}
+.zlist.split .l .tbl{table-layout:fixed;width:100%}
+.zlist.split .l td,.zlist.split .l th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zlist.split .l td>div,.zlist.split .l td>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.zlist.split .l :is(th,td):last-child{width:118px}
