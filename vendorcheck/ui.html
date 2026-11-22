@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css?v=3">
+<link rel="stylesheet" href="/static/procure.css?v=2">
+<script src="/static/procure.js?v=2"></script>
 <style>
 /* full-screen bill scanner: fixed, so it can never open off-screen; sized for phones first */
 .scn{position:fixed;inset:0;z-index:1000;background:#05070d;color:#fff;display:flex;flex-direction:column;
@@ -212,9 +214,9 @@ const IC={
  check:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',bank:'<path d="M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M2 21h20M12 3l9 5H3z"/>',
  led:'<path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/>',log:'<path d="M4 6h16M4 12h16M4 18h10"/>',set:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>'};
 const SCREENS=[
- {id:'dash',t:'Dashboard',k:'d',tab:1},{id:'vendors',t:'Vendors',k:'v',tab:1},{id:'inbox',t:'Payments',k:'p',tab:1},{id:'insights',t:'Insights',k:'i',tab:1},
+ {id:'dash',t:'Dashboard',k:'d',tab:1},{id:'vendors',t:'Vendors',k:'v',tab:1},{id:'inbox',t:'Payments',k:'p',tab:1},...(window.PROC_SCREENS||[]),{id:'insights',t:'Insights',k:'i',tab:1},
  {id:'ledger',t:'Ledger',k:'l'},{id:'bank',t:'Bank lines',k:'b'},{id:'vcheck',t:'Check a vendor',k:'c'},{id:'activity',t:'Activity',k:'y'},{id:'settings',t:'Settings',k:'s'}];
-const TABOF={dash:'dash',vendors:'vendors',vcheck:'vendors',inbox:'inbox',case:'inbox',ledger:'inbox',bank:'inbox',approvals:'inbox',insights:'insights',activity:'insights',settings:''};
+const TABOF={dash:'dash',vendors:'vendors',vcheck:'vendors',inbox:'inbox',case:'inbox',ledger:'inbox',bank:'inbox',approvals:'inbox',insights:'insights',activity:'insights',settings:'',...(window.PROC_TABOF||{})};
 let ROUTE={id:'dash'};
 function drawNav(){const w=INV.filter(r=>r.state==='awaiting_approval').length,h=INV.filter(r=>r.state==='held').length;
   const cnt={inbox:w+h};const on=TABOF[ROUTE.id];
@@ -225,9 +227,9 @@ async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
 const blobUrl=async p=>{const r=await fetch(p);return URL.createObjectURL(await r.blob())};
-async function go(id,arg){closeScanner();$('#drawer')&&$('#drawer').classList.remove('on');ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
+async function go(id,arg){closeScanner();$('#drawer')&&$('#drawer').classList.remove('on');document.querySelectorAll('.zmodal').forEach(m=>m.remove());ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
-  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings,insights})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
+  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings,insights,...(window.PROC_VIEWS||{})})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
 
 /* scan a paper bill. The scanner is a full-screen layer, so it cannot open off-screen on a phone.
