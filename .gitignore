@@ -13,3 +13,8 @@ vendorcheck/static/*.otf
 !vendorcheck/static/*.js
 !vendorcheck/static/*.css
 data/fixtures/statements/
+
+# bill scanning: compiled reader and runtime scans (test photos live in data/fixtures/bills/)
+data/bin/
+data/fixtures/scans/
+data/fixtures/inbox/scan_*.txt

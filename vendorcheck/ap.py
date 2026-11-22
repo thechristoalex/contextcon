@@ -88,8 +88,8 @@ def extract(text):
         "qty": float(_find(r"(?:qty|quantity)\s*[:\-]?\s*([\d.]+)", text) or 0) or None,
         "account_no": _find(r"(?:a/?c|account)\s*(?:no\.?|number)\s*[:\-]?\s*([0-9]{9,18})", text),
         "ifsc": (_find(r"ifsc\s*(?:code)?\s*[:\-]?\s*([A-Za-z]{4}0[A-Za-z0-9]{6})", text) or "").upper() or None,
-        "account_name": _find(r"(?:account name|beneficiary(?: name)?|a/?c name)\s*[:\-]\s*(.+)", text),
-        "vendor_name_text": _find(r"^(?:vendor|supplier|from company|billed by)\s*[:\-]\s*(.+)$", text, re.I | re.M),
+        "account_name": _find(r"(?:account name|beneficiary(?: name)?|a/?c name)\s*[:\-]\s*(.+?)(?=\s{2,}|$)", text, re.I | re.M),
+        "vendor_name_text": _find(r"^(?:vendor|supplier|from company|billed by)\s*[:\-]\s*(.+?)(?=\s{2,}|$)", text, re.I | re.M),
         "description": _find(r"^(?:description|particulars|services?)\s*[:\-]\s*(.+)$", text, re.I | re.M),
     }
 
@@ -211,6 +211,8 @@ def identify_vendor(x, vmap):
 
 
 def check_sender(x, v):
+    if x.get("scan"):
+        return chk("sender_domain", "n/a", f"Paper bill scanned at the desk (photo {x['scan']['photo']}): no email sender to check")
     d = x.get("sender_domain")
     if not d:
         return chk("sender_domain", "warn", "No sender address on the document", weight=5)
@@ -288,6 +290,8 @@ def check_gstin(x, v):
         return chk("gstin_binding", "warn", "No GSTIN on the invoice", weight=10)
     ev = [{"source": "invoice", "field": "GSTIN", "value": g}, {"source": "vendor master", "field": "gstin", "value": v.get("gstin")}]
     if not pipeline.gstin_valid(g):
+        if x.get("scan"):
+            return chk("gstin_binding", "fail", f"GSTIN read from the photo as {g} fails the check-character test: misread or not a real GST number. Compare with the photo.", ev, weight=60)
         return chk("gstin_binding", "fail", f"GSTIN {g} fails the check-character test: not a real GST number", ev, weight=60)
     ptype = g[5]
     legal = v["legal_name"].lower()
@@ -379,6 +383,8 @@ def process_file(path, text=None):
     if seen:
         return {"source_file": path, "invoice_key": seen["invoice_key"], "outcome": seen["outcome"], "note": "already processed (same file, same content)"}
     x = extract(text)
+    from . import scan  # imported here: scan imports this module
+    scan.attach(path, text, x)  # only for a photo this app read itself
     vmap = vendors()
     job = f"inv:{os.path.basename(path)}"
     log = lambda m: store.log(job, m)
@@ -386,6 +392,10 @@ def process_file(path, text=None):
     x["doc_type"], cls = settle_doc_type(x["doc_type"], jr)
     log(f"received; classified as {x['doc_type']}")
     checks = [cls]
+    if x.get("scan"):
+        checks.append(scan.check_legibility(x))
+        if checks[-1]["result"] == "fail":
+            return _finish(path, chash, f"unreadable:{chash}", None, x, "held", checks)
 
     v, how = identify_vendor(x, vmap)
     if not v:
