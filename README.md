@@ -23,7 +23,8 @@ cp .env.example .env            # then set CRUSTDATA_API_KEY=...
 python3 -m vendorcheck.cli inbox        # process every document in data/fixtures/inbox
 python3 -m vendorcheck.cli status       # one line per document
 python3 -m vendorcheck.cli approve "V001:2026-451" --by "AP lead"   # irreversible step: pay
-python3 -m vendorcheck.cli serve --port 8080                       # UI at http://127.0.0.1:8080
+python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv            # bank-statement lines
+python3 -m vendorcheck.cli serve --port 8080                       # landing page + app at http://127.0.0.1:8080
 ```
 
 A vendor check on its own (5.1 + 5.2):
@@ -32,7 +33,9 @@ A vendor check on its own (5.1 + 5.2):
 python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
 ```
 
-HTTP API (for another system to call): `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
+**Web app.** `serve` starts the public landing page at `/` and the signed-in app at `/app` (dashboard, inbox, approvals, vendors, vendor check, ledger, activity, settings). Sign-in uses Supabase Auth (Google, or an email sign-in link). Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` to turn it on. Every API call then needs a valid session token, and the approver recorded on a payment is the signed-in email, mirrored to a Supabase `approvals` table with row-level security. Without those two variables, or with `AUTH_REQUIRED=0`, the app runs in local mode with no sign-in. The CLI never needs sign-in.
+
+HTTP API (for another system to call; send `authorization: Bearer <session token>` when sign-in is on): `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
 
 ## Results on the test set (live data, 22 Nov 2026)
 
@@ -62,7 +65,7 @@ Each line is posted once: re-running the same file posts nothing new.
 
 ## How it works
 
-The architecture diagram is drawn live on the app's **Overview** page (`python3 -m vendorcheck.cli serve`, then open http://127.0.0.1:8080). The same flow as Mermaid:
+The flow, as Mermaid:
 
 ```mermaid
 flowchart LR
