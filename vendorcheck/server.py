@@ -151,6 +151,10 @@ class H(BaseHTTPRequestHandler):
                 "SELECT * FROM events WHERE job_id IN (?,?,?) ORDER BY id", (f"inv:{os.path.basename(r['source_file'])}", f"inv:{key}", f"trust:{r['vendor_id']}"))]
             return self._json({"invoice": dict(r), "decision": json.loads(r["decision_json"] or "{}"), "extracted": json.loads(r["extracted_json"]),
                                "vendor": v, "payment": dict(pay) if pay else None, "events": ev})
+        if p == "/api/bank":
+            from . import bank
+            store.db().execute(bank.SCHEMA)
+            return self._json([dict(r) for r in store.db().execute("SELECT * FROM bank_postings ORDER BY at DESC, line_no")])
         if p == "/api/payments":
             return self._json(ap.payments())
         if p == "/api/events":
@@ -197,6 +201,15 @@ class H(BaseHTTPRequestHandler):
                     inv = store.db().execute("SELECT extracted_json FROM invoices WHERE invoice_key=?", (b["key"],)).fetchone()
                     record_approval(getattr(self, "_token", None), user, b["key"], json.loads(inv["extracted_json"]).get("amount_inr"))
                 return self._json(r)
+            if p == "/api/bank":
+                from . import bank
+                name = os.path.basename(b.get("name") or f"statement_{int(time.time())}.csv")
+                path = os.path.join(ap.FIX, "statements", name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(b["csv"])
+                with _busy:
+                    return self._json(bank.post_file(path))
             if p == "/api/recheck":
                 with _busy:
                     return self._json(ap.recheck(b["key"]))
