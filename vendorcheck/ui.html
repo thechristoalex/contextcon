@@ -123,6 +123,70 @@ document.querySelectorAll('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go)
 $('#runall').onclick=async e=>{e.target.disabled=true;e.target.textContent='Running…';await api('/api/process',{});e.target.disabled=false;e.target.textContent='Process inbox';go('queue')};
 function render(arg){return ({home,queue,case:caseView,ledger,log:activity,vendor:vendorForm})[view](arg)}
 
+/* ---------- hero animation: a verification run, looping every 12s ---------- */
+function heroAnim(){
+  const T=12; // seconds per loop
+  const kf=(n,a)=>`@keyframes ${n}{0%,${a}%{opacity:0;transform:translateY(6px)}${a+2.5}%,90%{opacity:1;transform:none}95%,100%{opacity:0;transform:none}}`;
+  const steps=[['Vendor identified','GSTIN 29···ZM → V001',8],['Company record','Crustdata · founded 2015 · 10,461 staff',16],['Website live','shadowfax.in · names the company',24],
+    ['Director screened','Abhishek Bansal · 1 namesake cleared',32],['3-way match','PO-1001 · GRN-5001 · ₹2,36,000',40],['Bank account','matches account verified 02 Oct',48]];
+  let css=`.ha *{font-family:'IBM Plex Mono',monospace}.ha .sans{font-family:Inter,sans-serif}
+   .ha .step,.ha .fade{opacity:0;animation-duration:${T}s;animation-iteration-count:infinite;animation-timing-function:ease-out;transform-box:fill-box}
+   .ha .flow{stroke-dasharray:4 6;animation:dash 1.2s linear infinite}@keyframes dash{to{stroke-dashoffset:-20}}
+   .ha .scan{animation:scan ${T}s linear infinite}@keyframes scan{0%{transform:translateY(0);opacity:0}6%{opacity:.9}52%{transform:translateY(150px);opacity:.9}56%,100%{opacity:0;transform:translateY(150px)}}
+   .ha .bar{animation:bar ${T}s ease-in-out infinite;transform-origin:left;transform-box:fill-box}@keyframes bar{0%,6%{transform:scaleX(0)}52%,90%{transform:scaleX(1)}95%,100%{transform:scaleX(0)}}
+   .ha .arc{stroke-dasharray:283;animation:arc ${T}s ease-out infinite}@keyframes arc{0%,54%{stroke-dashoffset:283}64%,90%{stroke-dashoffset:255}95%,100%{stroke-dashoffset:283}}
+   .ha .needle{transform-origin:600px 196px;animation:needle ${T}s ease-out infinite}@keyframes needle{0%,54%{transform:rotate(-90deg)}64%,90%{transform:rotate(-72deg)}95%,100%{transform:rotate(-90deg)}}
+   .ha .pulse{animation:pulse 1.4s ease-in-out infinite}@keyframes pulse{50%{opacity:.25}}
+   .ha .prog{animation:prog ${T}s steps(1) infinite}@keyframes prog{0%,52%{opacity:1}53%,100%{opacity:0}}
+   .ha .done{opacity:0;animation:done ${T}s steps(1) infinite}@keyframes done{0%,52%{opacity:0}53%,90%{opacity:1}95%,100%{opacity:0}}
+   @media (prefers-reduced-motion:reduce){.ha *{animation:none!important}.ha .step,.ha .fade,.ha .done{opacity:1}.ha .prog{opacity:0}.ha .arc{stroke-dashoffset:255}.ha .needle{transform:rotate(-72deg)}}`;
+  steps.forEach((s,i)=>css+=kf('s'+i,s[2]));
+  [['g1',56],['g2',60],['c1',66],['c2',72],['c3',80],['c4',84]].forEach(([n,a])=>css+=kf(n,a));
+  const anim=(n)=>`style="animation-name:${n}"`;
+  // halftone dot field
+  let dots='';for(let y=0;y<18;y++)for(let x=0;x<70;x++){const d=Math.hypot((x-35)/35,(y-9)/9);const r=Math.max(0,1.6-d*1.3);if(r>.15)dots+=`<circle cx="${x*16+8}" cy="${y*16+40}" r="${r.toFixed(2)}"/>`;}
+  return `<svg class="ha" viewBox="0 0 1120 380" width="100%" role="img" aria-label="Animation: an invoice is verified check by check, scored low risk, approved and paid once">
+  <style>${css}</style>
+  <g fill="#384ce3" opacity=".35">${dots}</g>
+  <!-- connectors -->
+  <path class="flow" d="M396 170 H452" stroke="#384ce3" stroke-width="1.5" fill="none"/><path class="flow" d="M748 170 H804" stroke="#384ce3" stroke-width="1.5" fill="none"/>
+  <!-- card 1: verification console -->
+  <g transform="translate(76,40)">
+    <rect width="320" height="290" rx="4" fill="#121012"/>
+    <text x="20" y="32" fill="#fff" font-size="15" class="sans" font-weight="500">Shadowfax Technologies Ltd.</text>
+    <text x="20" y="52" fill="#8a8f98" font-size="11">INV/2026/0451 · ₹2,36,000.00</text>
+    <line x1="20" y1="66" x2="300" y2="66" stroke="#2a2a2e"/>
+    <rect class="scan" x="20" y="74" width="280" height="2" fill="#384ce3"/>
+    ${steps.map((s,i)=>`<g transform="translate(20,${84+i*28})"><g class="step" ${anim('s'+i)}><rect width="14" height="14" rx="2" fill="none" stroke="#384ce3"/><path d="M3 7.5 6 10.5 11 4" stroke="#c4f0ff" stroke-width="1.6" fill="none"/>
+      <text x="24" y="11" fill="#fff" font-size="11">${s[0]}</text><text x="24" y="23" fill="#8a8f98" font-size="9.5">${s[1]}</text></g></g>`).join('')}
+    <rect x="20" y="258" width="280" height="3" fill="#2a2a2e"/><rect class="bar" x="20" y="258" width="280" height="3" fill="#384ce3"/>
+    <text class="prog" x="20" y="280" fill="#8a8f98" font-size="10" letter-spacing=".08em"><tspan class="pulse">VERIFICATION IN PROGRESS…</tspan></text>
+    <text class="done" x="20" y="280" fill="#c4f0ff" font-size="10" letter-spacing=".08em">VERIFIED · 7.2 CREDITS · ₹180</text>
+  </g>
+  <!-- card 2: risk -->
+  <g transform="translate(452,70)">
+    <rect width="296" height="230" rx="4" fill="#fff" stroke="#ced3dc"/>
+    <text x="20" y="30" fill="#595959" font-size="11" letter-spacing=".04em">RISK SCORE</text>
+  </g>
+  <path d="M510 196 A90 90 0 0 1 690 196" fill="none" stroke="#e5e5e5" stroke-width="10"/>
+  <path class="arc" d="M510 196 A90 90 0 0 1 690 196" fill="none" stroke="#384ce3" stroke-width="10"/>
+  <line class="needle" x1="600" y1="196" x2="600" y2="124" stroke="#000" stroke-width="2"/><circle cx="600" cy="196" r="5" fill="#000"/>
+  <g class="fade" ${anim('g1')}><text x="600" y="232" text-anchor="middle" class="sans" font-size="22" font-weight="500" fill="#000">Low risk · 0</text></g>
+  <g class="fade" ${anim('g2')}><text x="600" y="256" text-anchor="middle" font-size="10.5" fill="#595959">0 FLAGS · 1 NAMESAKE CLEARED</text>
+    <text x="600" y="276" text-anchor="middle" font-size="10.5" fill="#384ce3">SEE FULL CASE →</text></g>
+  <!-- card 3: approval and payment -->
+  <g transform="translate(804,40)">
+    <rect width="240" height="290" rx="4" fill="#fff" stroke="#ced3dc"/>
+    <text x="20" y="30" fill="#595959" font-size="11" letter-spacing=".04em">PAYMENT</text>
+    <g class="fade" ${anim('c1')}><rect x="20" y="48" width="200" height="34" rx="4" fill="none" stroke="#384ce3"/><text x="120" y="69" text-anchor="middle" fill="#384ce3" font-size="11">AWAITING APPROVAL</text></g>
+    <g class="fade" ${anim('c2')}><text x="20" y="110" class="sans" font-size="13" fill="#000">Approved by AP lead</text><text x="20" y="128" font-size="10" fill="#595959">the one irreversible step</text></g>
+    <g class="fade" ${anim('c3')}><rect x="20" y="148" width="200" height="40" rx="4" fill="#09234f"/><text x="120" y="173" text-anchor="middle" fill="#fff" font-size="13" letter-spacing=".06em">PAID ONCE</text></g>
+    <g class="fade" ${anim('c4')}><text x="20" y="214" font-size="9.5" fill="#595959">IDEMPOTENCY KEY</text><text x="20" y="230" font-size="11" fill="#000">V001:2026-451</text>
+      <text x="20" y="254" font-size="9.5" fill="#595959">REF</text><text x="20" y="270" font-size="11" fill="#000">SIMPAY-D0D30AD9B5</text></g>
+  </g>
+  </svg>`;
+}
+
 /* ---------- architecture diagram (rendered live, not an image) ---------- */
 function diagram(){
   const N=(x,y,w,t,s,hl)=>`<g><rect x="${x}" y="${y}" width="${w}" height="${s?52:40}" rx="4" fill="${hl?'#384ce3':'rgba(56,76,227,.18)'}" stroke="${hl?'#c4f0ff':'#384ce3'}"/>
@@ -179,6 +243,7 @@ async function home(){
     <h1>Every vendor proven first.<br>Every invoice paid once.</h1>
     <p>An accounts-payable desk for an Indian 3PL that verifies who it is paying on live data, holds anything it cannot prove with a cited reason, and lets a person approve the one step that cannot be undone.</p>
     <div style="display:flex;gap:10px;justify-content:center"><button class="btn fill" onclick="go('queue')">Open the inbox</button><button class="btn" onclick="document.getElementById('arch').scrollIntoView({behavior:'smooth'})">How it works</button></div>
+    <div style="max-width:1120px;margin:56px auto 0">${heroAnim()}<div class="lbl" style="margin-top:8px">Illustration of test case 1 · open the inbox for live runs</div></div>
   </section>
   <div class="stats">
     <div class="stat"><div class="lbl">Documents</div><div class="n">${inv.length}</div></div>
