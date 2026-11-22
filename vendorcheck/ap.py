@@ -495,13 +495,20 @@ def draft_bank_verification(v, x):
 
 # ---------------- orchestration ----------------
 
-def process_file(path, text=None):
+def process_file(path, text=None, recheck_held=False):
     if text is None:
         with open(path, encoding="utf-8") as f:
             text = f.read()
     chash = hashlib.sha256(text.encode()).hexdigest()[:16]
     seen = store.db().execute("SELECT * FROM files_seen WHERE source_file=? AND content_hash=?", (path, chash)).fetchone()
     if seen:
+        # a document that was HELD is checked again when it comes in again: what held it (a vendor not yet on file, a
+        # source that was down) may have been fixed since. Anything else (paid, approved, duplicate) is never redone.
+        held = store.db().execute("SELECT state FROM invoices WHERE invoice_key=?", (seen["invoice_key"],)).fetchone()
+        if recheck_held and held and held["state"] == "held":
+            r = recheck(seen["invoice_key"])
+            if r.get("ok"):
+                return {**r["after"], "note": "received again while held: every check was run again"}
         return {"source_file": path, "invoice_key": seen["invoice_key"], "outcome": seen["outcome"], "note": "already processed (same file, same content)"}
     x = extract(text)
     from . import scan  # imported here: scan imports this module

@@ -396,5 +396,5 @@ def scan_bytes(data):
             old = f.read()
     if old != text:
         _write(txt, text.encode())
-    out = ap.process_file(txt)
+    out = ap.process_file(txt, recheck_held=True)
     return {**out, "photo": rec["photo"], "reader": rec["reader"], "read_ms": rec["ms"], "read_again": not hit}

@@ -196,7 +196,7 @@ class H(BaseHTTPRequestHandler):
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(b["text"])
                 with _busy:
-                    return self._json(ap.process_file(path))
+                    return self._json(ap.process_file(path, recheck_held=True))
             if p == "/api/approve":
                 who = b.get("by") or CONFIG.get("approver_name", "AP lead")
                 return self._json(ap.approve(b["key"], who))
