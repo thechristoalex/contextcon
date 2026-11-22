@@ -3,7 +3,7 @@ Subject: Tax Invoice INV/2026/0451
 
 TAX INVOICE
 Vendor: Shadowfax Technologies Limited
-GSTIN: 29AAAAA0001A1Z5
+GSTIN: 29AAMCS1234A1ZM
 Invoice No: INV/2026/0451
 Invoice Date: 10 Nov 2026
 PO No: PO-1001

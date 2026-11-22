@@ -3,7 +3,7 @@ Subject: Invoice TCIE/26-27/3412
 
 TAX INVOICE
 Vendor: TCI Express Limited
-GSTIN: 06AAAAA0002A1Z5
+GSTIN: 06AAACT1234B1Z3
 Invoice No: TCIE/26-27/3412
 Invoice Date: 18 Nov 2026
 PO No: PO-1003

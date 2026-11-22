@@ -3,7 +3,7 @@ Subject: Reminder + invoice copy (PDF re-export)
 
 TAX INVOICE (copy)
 Vendor: Shadowfax Technologies Limited
-GSTIN: 29AAAAA0001A1Z5
+GSTIN: 29AAMCS1234A1ZM
 Invoice Number: INV-2026-451
 Date: 10 Nov 2026
 PO No: PO-1001

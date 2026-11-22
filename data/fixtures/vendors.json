@@ -1,14 +1,56 @@
 [
-  {"vendor_id": "V001", "legal_name": "Shadowfax Technologies Limited", "domain": "shadowfax.in", "director": "Abhishek Bansal",
-   "gstin": "29AAAAA0001A1Z5", "bank": {"account_no": "50200011112222", "ifsc": "HDFC0000123", "verified_on": "2026-10-02"},
-   "contact": {"name": "Accounts team", "email": "accounts@shadowfax.in", "phone": "+91-80-0000-0001"},
-   "note": "Real company. GSTIN, bank and contacts are fictitious test values."},
-  {"vendor_id": "V002", "legal_name": "TCI Express Limited", "domain": "tciexpress.in", "director": "Anil Kumar",
-   "gstin": "06AAAAA0002A1Z5", "bank": {"account_no": "912020033334444", "ifsc": "UTIB0000456", "verified_on": "2026-09-18"},
-   "contact": {"name": "Vendor desk", "email": "vendors@tciexpress.in", "phone": "+91-124-000-0002"},
-   "note": "Real company; CEO has a very common name (namesake test). GSTIN, bank and contacts are fictitious."},
-  {"vendor_id": "V003", "legal_name": "Shreeji Cargo Movers Private Limited", "domain": "shreejicargomovers-india.com", "director": "Ramesh Patel",
-   "gstin": "24AAAAA0003A1Z5", "bank": {"account_no": "38291000555666", "ifsc": "ICIC0000789", "verified_on": "2026-11-20"},
-   "contact": {"name": "Ramesh", "email": "billing@shreejicargomovers-india.com", "phone": "+91-79-000-0003"},
-   "note": "Fictitious front company (test case 2): papers look fine, no record anywhere."}
+  {
+    "vendor_id": "V001",
+    "legal_name": "Shadowfax Technologies Limited",
+    "domain": "shadowfax.in",
+    "director": "Abhishek Bansal",
+    "gstin": "29AAMCS1234A1ZM",
+    "bank": {
+      "account_no": "50200011112222",
+      "ifsc": "HDFC0000123",
+      "verified_on": "2026-10-02"
+    },
+    "contact": {
+      "name": "Accounts team",
+      "email": "accounts@shadowfax.in",
+      "phone": "+91-80-0000-0001"
+    },
+    "note": "Real company. GSTIN, bank and contacts are fictitious test values."
+  },
+  {
+    "vendor_id": "V002",
+    "legal_name": "TCI Express Limited",
+    "domain": "tciexpress.in",
+    "director": "Anil Kumar",
+    "gstin": "06AAACT1234B1Z3",
+    "bank": {
+      "account_no": "912020033334444",
+      "ifsc": "UTIB0000456",
+      "verified_on": "2026-09-18"
+    },
+    "contact": {
+      "name": "Vendor desk",
+      "email": "vendors@tciexpress.in",
+      "phone": "+91-124-000-0002"
+    },
+    "note": "Real company; CEO has a very common name (namesake test). GSTIN, bank and contacts are fictitious."
+  },
+  {
+    "vendor_id": "V003",
+    "legal_name": "Shreeji Cargo Movers Private Limited",
+    "domain": "shreejicargomovers-india.com",
+    "director": "Ramesh Patel",
+    "gstin": "24AAPCS5678C1Z1",
+    "bank": {
+      "account_no": "38291000555666",
+      "ifsc": "ICIC0000789",
+      "verified_on": "2026-11-20"
+    },
+    "contact": {
+      "name": "Ramesh",
+      "email": "billing@shreejicargomovers-india.com",
+      "phone": "+91-79-000-0003"
+    },
+    "note": "Fictitious front company (test case 2): papers look fine, no record anywhere."
+  }
 ]

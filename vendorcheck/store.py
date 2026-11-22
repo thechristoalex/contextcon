@@ -6,6 +6,7 @@ Everything lives in one SQLite file so a killed process can restart and resume:
 - an irreversible action runs at most once (actions.idempotency_key is UNIQUE)
 """
 import json
+import sys
 import os
 import sqlite3
 import threading
@@ -132,7 +133,7 @@ def db():
 def log(job_id, msg, level="info"):
     with _lock:
         db().execute("INSERT INTO events(job_id, level, msg, at) VALUES (?,?,?,?)", (job_id, level, msg, time.time()))
-    print(f"[{time.strftime('%H:%M:%S')}] [{job_id or '-'}] {msg}", flush=True)
+    print(f"[{time.strftime("%H:%M:%S")}] [{job_id or "-"}] {msg}", file=sys.stderr, flush=True)
 
 
 # ---------- jobs / steps ----------

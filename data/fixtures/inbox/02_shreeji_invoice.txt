@@ -3,7 +3,7 @@ Subject: Invoice SCM-778
 
 TAX INVOICE
 Vendor: Shreeji Cargo Movers Private Limited
-GSTIN: 24AAAAA0003A1Z5
+GSTIN: 24AAPCS5678C1Z1
 Invoice No: SCM-778
 Invoice Date: 15 Nov 2026
 PO No: PO-1002

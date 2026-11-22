@@ -196,6 +196,26 @@ def check_bank(x, v):
     return chk("bank_details", "pass", "Bank account matches the verified account on file", ev)
 
 
+PAN_TYPES = {"C": "company", "F": "firm / LLP", "P": "individual (proprietor)", "H": "HUF", "T": "trust", "A": "AOP", "B": "BOI", "G": "government", "L": "local authority", "J": "artificial juridical person"}
+
+
+def check_gstin(x, v):
+    """Local, free checks: check character, PAN entity type vs legal form, and binding to the vendor master."""
+    g = x.get("gstin")
+    if not g:
+        return chk("gstin_binding", "warn", "No GSTIN on the invoice", weight=10)
+    ev = [{"source": "invoice", "field": "GSTIN", "value": g}, {"source": "vendor master", "field": "gstin", "value": v.get("gstin")}]
+    if not pipeline.gstin_valid(g):
+        return chk("gstin_binding", "fail", f"GSTIN {g} fails the check-character test: not a real GST number", ev, weight=60)
+    ptype = g[5]
+    legal = v["legal_name"].lower()
+    if ("limited" in legal or "pvt" in legal or "private" in legal) and ptype != "C":
+        return chk("gstin_binding", "fail", f"GSTIN's PAN is type '{ptype}' ({PAN_TYPES.get(ptype, '?')}) but {v['legal_name']} is a company (expected 'C')", ev, weight=50)
+    if g != v.get("gstin"):
+        return chk("gstin_binding", "fail", f"Invoice GSTIN {g} differs from the GSTIN on the vendor record {v.get('gstin')}: possible borrowed identity", ev, weight=60)
+    return chk("gstin_binding", "pass", f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record", ev)
+
+
 def check_trust(v):
     """Vendor check (5.1 + 5.2) on live data, cached per vendor."""
     req = {"vendor_name": v["legal_name"], "website": v.get("domain"), "director": v.get("director"),
@@ -264,7 +284,7 @@ def process_file(path, text=None):
     checks.append(dup)
     if dup["result"] == "fail":
         return _finish(path, chash, key + f"#dup-{chash}", v["vendor_id"], x, "duplicate", checks, duplicate_of=orig)
-    checks += [check_sender(x, v), check_po(x, v), check_bank(x, v)]
+    checks += [check_sender(x, v), check_gstin(x, v), check_po(x, v), check_bank(x, v)]
     tc, trust_report = check_trust(v)
     checks.append(tc)
     fails = [c for c in checks if c["result"] in ("fail", "unavailable")]

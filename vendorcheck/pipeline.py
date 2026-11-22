@@ -195,8 +195,12 @@ class Job:
         q = f"\"{legal_name}\" CIN GSTIN"
         resp, meta = crust.call(self.id, "/web/search/live", {"query": q, "location": "IN"})
         hits = []
+        toks = norm_tokens(legal_name)
         for r in (resp or {}).get("results", [])[:10]:
             blob = f"{r.get('title', '')} {r.get('snippet', '')}"
+            # a search result about another company is not a source for this one
+            if not toks or not all(t in blob.lower() for t in toks):
+                continue
             for m in CIN_RE.finditer(blob):
                 hits.append({"kind": "CIN", "value": m.group(0), "title": r.get("title"), "url": r.get("url"), "snippet": r.get("snippet")})
             for m in GSTIN_RE.finditer(blob):
@@ -231,6 +235,16 @@ class Job:
             else:
                 namesakes.append(item)
         return {"query": query, "hits": hits, "namesakes_cleared": namesakes, "meta": meta}
+
+    def screening_metrics(self):
+        found = cleared = escalated = 0
+        for k in ("adverse_company",) + tuple(f"adverse_person_{i}" for i in range(CONFIG["max_people_screened"])):
+            st = store.get_step(self.id, k)
+            if st:
+                found += len(st["hits"]) + len(st["namesakes_cleared"])
+                cleared += len(st["namesakes_cleared"])
+                escalated += len(st["hits"])
+        return {"hits_found": found, "hits_cleared": cleared, "hits_escalated": escalated}
 
     # ---------------- orchestration ----------------
     def run(self):
@@ -298,7 +312,7 @@ class Job:
         self.fact("Company name", legal, src("basic_info.name"))
         status = (bi.get("status") or "").lower()
         if status:
-            self.fact("Operating status", status, src("basic_info.status"))
+            self.fact("Crustdata record status (dataset status, not registry status)", status, src("basic_info.status"))
             if status not in ("active", "operating"):
                 self.flag("red", f"Company status is '{status}', not active", src("basic_info.status"))
         else:
@@ -374,17 +388,18 @@ class Job:
         # ---- registry IDs
         reg = self.step("registry", lambda: self.s_registry(legal))
         cins = [h for h in reg["hits"] if h["kind"] == "CIN"]
-        if cins:
-            vals = sorted({h["value"] for h in cins})
+        vals = sorted({h["value"] for h in cins})
+        if len(vals) == 1:
             h = cins[0]
-            self.fact("CIN found in public records", h["value"],
-                      {"type": "web", "url": h["url"], "field": "search snippet", "passage": h["snippet"], "record_date": None})
-            if len(vals) > 1:
-                self.flag("amber", f"Sources disagree on the CIN: {', '.join(vals)}", {"type": "web", "url": h["url"]})
+            # secondary source (a third-party listing), cited as such; not a registry record
+            self.fact("CIN named by a secondary public listing (not the MCA registry)", h["value"],
+                      {"type": "web", "url": h["url"], "field": "search result passage", "passage": h["snippet"], "strength": "secondary"})
             listed = "public" in (bi.get("company_type") or "").lower()
             if listed and h["value"][0] == "U":
-                self.flag("amber", f"CIN {h['value']} is an unlisted-company number but the record says publicly traded; source may be stale",
-                          {"type": "web", "url": h["url"], "passage": h["snippet"]})
+                self.missing.append(f"CIN {h['value']} from a secondary listing is an unlisted-company number but the company is publicly traded; the listing may be stale")
+        elif len(vals) > 1:
+            # group companies share names (e.g. several "TCI" entities); search cannot say which CIN is this vendor's
+            self.missing.append(f"registry not confirmed: secondary listings name {len(vals)} different CINs for similarly named companies ({', '.join(vals[:4])}); MCA lookup needed")
         else:
             self.missing.append("no CIN found in public sources (company registry not confirmed)")
         if gstin:
@@ -402,14 +417,21 @@ class Job:
 
         # ---- adverse media: company
         short = " ".join(norm_tokens(legal)) or legal
-        adv = self.step("adverse_company", lambda: self.s_adverse(f"\"{short}\" fraud OR raid OR insolvency OR penalty OR scam", [short.split()[0]]))
+        adv = self.step("adverse_company", lambda: self.s_adverse(f"\"{short}\" raid OR arrested OR FIR OR NCLT OR insolvency OR \"GST evasion\" OR \"money laundering\"", [short.split()[0]]))
         for h in adv["hits"][:3]:
             self.flag("red", f"Adverse media on the company: \"{h['title']}\" ({', '.join(h['terms'])})",
                       {"type": "web", "url": h["url"], "passage": h["snippet"], "record_date": h.get("date")})
 
         # ---- adverse media: people, clearing namesakes
-        for i, l in enumerate(leaders[:CONFIG["max_people_screened"]]):
-            a = self.step(f"adverse_person_{i}", lambda l=l: self.s_adverse(f"\"{l['name']}\" fraud OR arrested OR raid OR scam", [l["name"].split()[-1], short.split()[0]]))
+        # screen the director named on the request first, then the founders / CXOs on record
+        subjects = []
+        if self.req.get("director"):
+            subjects.append({"name": self.req["director"], "title": "director named by the vendor", "group": "request"})
+        for l in leaders:
+            if all(name_similarity(l["name"], s["name"]) < 0.6 for s in subjects):
+                subjects.append(l)
+        for i, l in enumerate(subjects[:CONFIG["max_people_screened"]]):
+            a = self.step(f"adverse_person_{i}", lambda l=l: self.s_adverse(f"\"{l['name']}\" arrested OR FIR OR raid OR \"fraud case\" OR \"money laundering\"", [l["name"].split()[-1], short.split()[0]]))
             for h in a["hits"][:2]:
                 self.flag("red", f"Adverse media naming {l['name']} together with {legal}: \"{h['title']}\"",
                           {"type": "web", "url": h["url"], "passage": h["snippet"], "record_date": h.get("date")})
@@ -446,6 +468,7 @@ class Job:
             "facts": self.facts,
             "flags": self.flags,
             "cannot_verify": self.missing,
+            "screening": self.screening_metrics(),
             "approval": {"required_for": "adding the vendor to the approved vendor master", "action": action} if action else None,
             "cost": {"credits": led["total_credits"], "inr": round(led["total_credits"] * CONFIG["inr_per_credit"], 2),
                      "paid_calls": led["paid_calls"], "cache_hits": led["cache_hits"]},

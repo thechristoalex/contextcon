@@ -34,8 +34,9 @@ CONFIG = {
 }
 
 ADVERSE_TERMS = [
-    "fraud", "scam", "arrested", "arrest", "raid", "ed raid", "cbi", "money laundering", "cheating",
-    "insolvency", "nclt", "liquidation", "bankrupt", "default", "wilful defaulter", "penalty",
-    "sebi order", "gst evasion", "fake invoice", "tax evasion", "shut down", "shuts down", "blacklisted",
-    "ponzi", "forgery", "embezzlement", "lawsuit", "sued",
+    # legal / regulatory events only. Consumer complaints ("fake delivery", "scam call") are not adverse media.
+    "arrested", "arrest", "raid", "raids", "fir", "chargesheet", "charge sheet", "ed", "cbi", "sfio", "money laundering",
+    "insolvency", "nclt", "liquidation", "winding up", "bankruptcy", "wilful defaulter", "sebi order", "sebi bars",
+    "gst evasion", "tax evasion", "fake invoices", "bogus firms", "shell company", "ponzi", "forgery", "embezzlement",
+    "convicted", "debarred", "blacklisted", "fraud case", "cheating case",
 ]
