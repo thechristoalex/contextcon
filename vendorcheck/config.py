@@ -30,6 +30,7 @@ CONFIG = {
     # how many people (founders / CXOs) to screen for adverse media
     "max_people_screened": 2,
     # rupee value of 1 Crustdata credit, for the per-job cost in the report
+    "auto_approve_below_inr": float(os.environ.get("AUTO_APPROVE_BELOW_INR", "0")),
     "inr_per_credit": float(os.environ.get("INR_PER_CREDIT", "25")),
 }
 

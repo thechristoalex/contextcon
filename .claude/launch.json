@@ -1,1 +1,4 @@
-{"version":"0.0.1","configurations":[{"name":"desk","runtimeExecutable":"python3","runtimeArgs":["-m","vendorcheck.cli","serve","--port","8080"],"port":8080}]}
+{"version":"0.0.1","configurations":[
+ {"name":"desk","runtimeExecutable":"python3","runtimeArgs":["-m","vendorcheck.cli","serve","--port","8080"],"port":8080},
+ {"name":"desk-local","runtimeExecutable":"env","runtimeArgs":["AUTH_REQUIRED=0","python3","-m","vendorcheck.cli","serve","--port","8081"],"port":8081}
+]}

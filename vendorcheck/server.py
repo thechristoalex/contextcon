@@ -18,10 +18,53 @@ import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import ap, pipeline, store
+import time
+import urllib.request
 
-UI = os.path.join(os.path.dirname(__file__), "ui.html")
+from . import ap, pipeline, store
+from .config import CONFIG
+
+HERE = os.path.dirname(__file__)
+UI = os.path.join(HERE, "ui.html")
+LANDING = os.path.join(HERE, "landing.html")
 _busy = threading.Lock()
+
+# ---- auth: Supabase sessions (Google or email link). The CLI never needs this. ----
+SUPA_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPA_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+AUTH_REQUIRED = os.environ.get("AUTH_REQUIRED", "1" if SUPA_URL else "0") == "1"
+_tok_cache = {}
+
+
+def verify_token(token):
+    """Ask Supabase who this access token belongs to. Cached for 5 minutes."""
+    if not token:
+        return None
+    hit = _tok_cache.get(token)
+    if hit and hit[1] > time.time():
+        return hit[0]
+    req = urllib.request.Request(SUPA_URL + "/auth/v1/user", headers={"apikey": SUPA_KEY, "authorization": "Bearer " + token})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            u = json.loads(r.read())
+    except Exception:
+        return None
+    user = {"id": u.get("id"), "email": u.get("email")}
+    _tok_cache[token] = (user, time.time() + 300)
+    return user
+
+
+def record_approval(token, user, key, amount):
+    """Write the approval to Supabase (row-level security: a user can only insert rows as themselves)."""
+    if not (SUPA_URL and token):
+        return
+    body = json.dumps({"invoice_key": key, "amount_inr": amount, "approver_email": user.get("email")}).encode()
+    req = urllib.request.Request(SUPA_URL + "/rest/v1/approvals", data=body, method="POST", headers={
+        "apikey": SUPA_KEY, "authorization": "Bearer " + token, "content-type": "application/json", "prefer": "return=minimal"})
+    try:
+        urllib.request.urlopen(req, timeout=10).read()
+    except Exception as e:
+        store.log(None, f"approval mirror to Supabase failed: {e}", "warn")
 
 
 def _inv_row(r):
@@ -48,21 +91,47 @@ class H(BaseHTTPRequestHandler):
         n = int(self.headers.get("content-length") or 0)
         return json.loads(self.rfile.read(n) or b"{}") if n else {}
 
+    def _page(self, path):
+        b = open(path, "rb").read()
+        self.send_response(200)
+        self.send_header("content-type", "text/html; charset=utf-8")
+        self.send_header("content-length", str(len(b)))
+        self.end_headers()
+        return self.wfile.write(b)
+
+    def _user(self):
+        """None if auth is required and the request has no valid session."""
+        if not AUTH_REQUIRED:
+            return {"email": None, "id": None, "local": True}
+        h = self.headers.get("authorization") or ""
+        self._token = h[7:] if h.lower().startswith("bearer ") else None
+        return verify_token(self._token)
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         p = u.path
         if p in ("/", "/index.html"):
-            b = open(UI, "rb").read()
+            return self._page(LANDING)
+        if p in ("/app", "/app/"):
+            return self._page(UI)
+        if p == "/config.js":
+            js = f"window.SUPA={json.dumps({'url': SUPA_URL, 'key': SUPA_KEY, 'required': AUTH_REQUIRED}) if SUPA_URL else 'null'};".encode()
             self.send_response(200)
-            self.send_header("content-type", "text/html; charset=utf-8")
+            self.send_header("content-type", "text/javascript")
             self.end_headers()
-            return self.wfile.write(b)
+            return self.wfile.write(js)
+        if (p.startswith("/api/") or p.startswith("/cases")) and not self._user():
+            return self._json({"error": "sign in required"}, 401)
+        if p == "/api/me":
+            return self._json(self._user())
+        if p == "/api/settings":
+            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit") if k in CONFIG})
         if p.startswith("/static/"):
             name = os.path.basename(p)
             fp = os.path.join(os.path.dirname(__file__), "static", name)
             if not os.path.isfile(fp):
                 return self._json({"error": "not found"}, 404)
-            ctype = {".woff2": "font/woff2", ".woff": "font/woff", ".otf": "font/otf", ".ttf": "font/ttf", ".svg": "image/svg+xml"}.get(os.path.splitext(name)[1], "application/octet-stream")
+            ctype = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".woff": "font/woff", ".otf": "font/otf", ".ttf": "font/ttf", ".svg": "image/svg+xml"}.get(os.path.splitext(name)[1], "application/octet-stream")
             b = open(fp, "rb").read()
             self.send_response(200)
             self.send_header("content-type", ctype)
@@ -87,7 +156,11 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/events":
             return self._json([dict(e) for e in store.db().execute("SELECT * FROM events ORDER BY id DESC LIMIT 300")])
         if p == "/api/vendors":
-            return self._json(list(ap.vendors().values()))
+            out = []
+            for v in ap.vendors().values():
+                j = store.get_job(f"trust:{v['vendor_id']}")
+                out.append({**v, "trust": j["verdict"] if j else None})
+            return self._json(out)
         if p.startswith("/cases/"):
             j = store.get_job(p[len("/cases/"):])
             return self._json({**j, "report": json.loads(j["report_json"] or "null")} if j else {"error": "not found"}, 200 if j else 404)
@@ -96,7 +169,16 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         p = urllib.parse.urlparse(self.path).path
         b = self._body()
+        user = self._user()
+        if not user:
+            return self._json({"error": "sign in required"}, 401)
         try:
+            if p == "/api/settings":
+                for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount"):
+                    if k in b:
+                        CONFIG[k] = float(b[k])
+                store.log(None, f"settings changed by {user.get('email') or 'local'}: {b}")
+                return self._json({"ok": True})
             if p == "/api/process":
                 with _busy:
                     return self._json(ap.process_inbox())
@@ -108,7 +190,13 @@ class H(BaseHTTPRequestHandler):
                 with _busy:
                     return self._json(ap.process_file(path))
             if p == "/api/approve":
-                return self._json(ap.approve(b["key"], b.get("by") or "approver"))
+                # the approver is the signed-in identity, not a typed name
+                who = user.get("email") or b.get("by") or "local approver"
+                r = ap.approve(b["key"], who)
+                if r.get("ok"):
+                    inv = store.db().execute("SELECT extracted_json FROM invoices WHERE invoice_key=?", (b["key"],)).fetchone()
+                    record_approval(getattr(self, "_token", None), user, b["key"], json.loads(inv["extracted_json"]).get("amount_inr"))
+                return self._json(r)
             if p == "/api/recheck":
                 with _busy:
                     return self._json(ap.recheck(b["key"]))

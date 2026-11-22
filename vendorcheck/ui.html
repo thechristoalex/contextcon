@@ -6,260 +6,88 @@
 <title>Payables Desk</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
-<style>
-@font-face{font-family:"PP Mondwest";src:local("PP Mondwest"),local("PPMondwest-Regular"),url("/static/PPMondwest-Regular.woff2") format("woff2"),url("/static/PPMondwest-Regular.otf") format("opentype");font-display:swap}
-:root{
-  --navy:#09234f; --blue:#384ce3; --teal:#1888a2; --ink:#000; --carbon:#121012; --quiet:#595959;
-  --steel:#ced3dc; --sky:#c4f0ff; --rule:#e5e5e5; --mint:#eff5f0; --paper:#fff;
-  --sans:"Inter",-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
-  --display:"PP Mondwest","Cormorant Garamond",Georgia,serif;
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans);letter-spacing:-.009em}
-a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
-.mono,.lbl,.btn,.chip,th{font-family:var(--mono);font-weight:500}
-.lbl{font-size:12px;text-transform:uppercase;letter-spacing:.02em;color:var(--quiet)}
-
-/* top navigation */
-header{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:28px;padding:0 32px;height:60px}
-.logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px;color:var(--blue);cursor:pointer}
-.logo svg{display:block}
-nav{display:flex;gap:22px}
-nav{scrollbar-width:none}nav::-webkit-scrollbar{display:none}
-nav a{white-space:nowrap;color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;padding:19px 0;border-bottom:2px solid transparent}
-nav a.on{border-bottom-color:var(--blue)} nav a:hover{text-decoration:none;color:var(--blue)}
-.actions{margin-left:auto;display:flex;gap:10px}
-.btn{font-size:13px;text-transform:uppercase;letter-spacing:.02em;border-radius:4px;padding:9px 14px;cursor:pointer;border:1px solid var(--steel);background:var(--paper);color:var(--ink)}
-.btn:hover{border-color:var(--ink)}
-.btn.fill{background:var(--blue);border-color:var(--blue);color:#fff}
-.btn.navy{background:var(--navy);border-color:var(--navy);color:#fff}
-.btn:disabled{opacity:.5;cursor:wait}
-
-main{max-width:1312px;margin:0 auto;padding:32px}
-section{position:relative}
-.plus{position:absolute;width:11px;height:11px} .plus:before,.plus:after{content:"";position:absolute;background:var(--ink)}
-.plus:before{left:5px;top:0;width:1px;height:11px}.plus:after{top:5px;left:0;height:1px;width:11px}
-.tl{left:-6px;top:-6px}.tr{right:-6px;top:-6px}.bl{left:-6px;bottom:-6px}.br{right:-6px;bottom:-6px}
-
-/* animation containers: the bottom edge dissolves into the page background */
-.animwrap{position:relative;max-width:1120px;margin:56px auto 0}
-.animwrap:after{content:"";position:absolute;left:0;right:0;bottom:0;height:16%;pointer-events:none;background:linear-gradient(to bottom,rgba(255,255,255,0),var(--paper) 85%)}
-.animwrap .lbl{position:relative;z-index:1}
-/* home */
-.hero{padding:96px 24px 80px;text-align:center}
-.hero h1{font-family:var(--display);font-weight:400;font-size:72px;line-height:1.02;letter-spacing:-.36px;margin:0 auto 24px;max-width:980px}
-.hero p{font-size:20px;line-height:1.4;color:var(--quiet);max-width:720px;margin:0 auto 32px}
-.field{background:var(--navy);color:#fff;padding:32px;position:relative;background-image:linear-gradient(rgba(255,255,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.06) 1px,transparent 1px);background-size:32px 32px}
-.field .lbl{color:var(--sky)}
-.field h2{font-family:var(--display);font-weight:400;font-size:40px;line-height:1.1;margin:8px 0 24px}
-.stats{display:grid;grid-template-columns:repeat(5,1fr);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);margin:32px 0}
-.stat{padding:20px;border-right:1px solid var(--rule)} .stat:last-child{border-right:0}
-.stat .n{font-family:var(--display);font-size:48px;line-height:1.1}
-.rows{border-top:1px solid var(--rule)}
-.rowi{display:grid;grid-template-columns:40px minmax(180px,1fr) 1.6fr 0;gap:20px;align-items:baseline;padding:18px 0;border-bottom:1px solid var(--rule)}
-.rowi .t{font-size:20px;font-weight:500}.rowi .d{color:var(--quiet)}.rowi .i{font-family:var(--mono);font-size:12px;color:var(--quiet);text-align:right}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:32px;margin:48px 0}
-h2.sec{font-family:var(--display);font-weight:400;font-size:48px;line-height:1.1;letter-spacing:-.24px;margin:0 0 20px}
-
-/* tables + status rows */
-table{width:100%;border-collapse:collapse}
-th{font-size:12px;text-transform:uppercase;color:var(--quiet);text-align:left;padding:10px 12px;border-bottom:1px solid var(--ink)}
-td{padding:12px;border-bottom:1px solid var(--rule);vertical-align:top}
-tr.row{cursor:pointer} tr.row:hover td{background:#f7f8fb}
-.chip{display:inline-block;font-size:11px;text-transform:uppercase;padding:3px 8px;border-radius:4px;border:1px solid;white-space:nowrap}
-.paid{color:var(--teal);border-color:var(--teal)}
-.held{color:#a15c00;border-color:#d9a35b}
-.duplicate,.rejected{color:#b42318;border-color:#e7a29b}
-.awaiting_approval,.approved{color:var(--blue);border-color:var(--blue)}
-.pass{color:var(--teal)} .fail,.unavailable{color:#b42318} .warn{color:#a15c00}
-.muted{color:var(--quiet)} .small{font-size:13px}
-.panel{border:1px solid var(--rule);padding:20px;margin-bottom:32px;overflow-x:auto}
-.panel>.lbl{display:block;margin-bottom:12px}
-.ev{font-size:13px;color:var(--quiet);margin-top:4px}
-pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:var(--mint);border:1px solid var(--rule);padding:14px;margin:0}
-.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
-textarea,input{font:14px var(--sans);border:1px solid var(--steel);border-radius:4px;padding:9px 10px;background:var(--paper);color:var(--ink)}
-textarea{width:100%;min-height:160px;font-family:var(--mono);font-size:12px}
-
-/* verdict console (product world) */
-.console{background:var(--navy);color:#fff;padding:24px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:24px;margin-bottom:32px;border-radius:4px;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:24px 24px}
-.console .lbl{color:var(--sky)}
-.console h2{font-family:var(--display);font-weight:400;font-size:40px;line-height:1.05;margin:6px 0 10px}
-.console .chip{background:rgba(255,255,255,.08)}.console h2 .chip{font-size:18px;padding:6px 12px}
-.console .paid{color:#7fe0f5;border-color:#7fe0f5}.console .held{color:#ffd28a;border-color:#ffd28a}
-.console .duplicate,.console .rejected{color:#ffb4ab;border-color:#ffb4ab}.console .awaiting_approval{color:var(--sky);border-color:var(--sky)}
-.console .big{font-family:var(--mono);font-size:44px;line-height:1}
-.console input{background:transparent;color:#fff;border-color:rgba(255,255,255,.3)}
-.console .btn{border-color:rgba(255,255,255,.4);background:transparent;color:#fff}
-.console .btn.fill{background:var(--blue);border-color:var(--blue)}
-.bar{height:4px;background:rgba(255,255,255,.12);margin-top:8px}.bar i{display:block;height:4px;background:var(--blue)}
-
-@media(max-width:900px){
-  header{padding:0 16px;gap:16px;height:auto;flex-wrap:wrap}nav{order:3;width:100%;gap:16px;overflow-x:auto}nav a{padding:10px 0}
-  main{padding:20px 16px}.hero{padding:56px 8px 48px}.hero h1{font-size:44px}.stats{grid-template-columns:1fr 1fr}
-  .stat{border-bottom:1px solid var(--rule)}.two,.console{grid-template-columns:1fr}.rowi{grid-template-columns:32px 1fr;}.rowi .d,.rowi .i{grid-column:2}
-  h2.sec{font-size:36px}
-}
-@media print{header,.toolbar,.btn,.actions{display:none!important}.console{background:#fff;color:#000;border:1px solid #000}.console .lbl{color:#555}
-  main:before{content:"Payables Desk · Case file";display:block;font-family:var(--display);font-size:28px;margin-bottom:16px}}
-</style>
+<link rel="stylesheet" href="/static/base.css">
 </head>
 <body>
 <header>
   <div class="logo" data-go="home"><svg width="26" height="22" viewBox="0 0 26 22" fill="none" stroke="#384ce3" stroke-width="2"><path d="M13 2 24 7 13 12 2 7z"/><path d="M2 11.5 13 16.5 24 11.5"/><path d="M2 15.5 13 20.5 24 15.5"/></svg>Payables Desk</div>
   <nav>
-    <a data-go="home" class="on">Overview</a><a data-go="queue">Inbox</a><a data-go="ledger">Ledger</a><a data-go="vendor">Vendor check</a><a data-go="log">Activity</a>
+    <a data-go="home" class="on">Dashboard</a><a data-go="queue">Inbox</a><a data-go="approvals">Approvals</a><a data-go="vendors">Vendors</a><a data-go="vendor">Vendor check</a><a data-go="ledger">Ledger</a><a data-go="log">Activity</a><a data-go="settings">Settings</a>
   </nav>
-  <div class="actions"><button class="btn" data-go="queue">Open inbox</button><button class="btn fill" id="runall">Process inbox</button></div>
+  <div class="actions"><span class="mono small muted" id="who"></span><button class="btn fill" id="runall">Process inbox</button><button class="btn" id="signout">Sign out</button></div>
 </header>
-<main id="app"></main>
+<main id="app"><div class="muted" style="padding:40px 0">Loading…</div></main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="/config.js"></script>
 <script>
 const $=s=>document.querySelector(s), app=$('#app');
 const inr=n=>n==null?'—':'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2});
 const ts=t=>t?new Date(t*1000).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'medium'}):'—';
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const api=async(p,b)=>{const r=await fetch(p,b?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)}:{});return r.json()};
+/* auth: every API call carries the Supabase session token; the server verifies it */
+const sb=(window.SUPA&&window.supabase)?window.supabase.createClient(SUPA.url,SUPA.key):null;
+let TOKEN=null, ME=null;
+const api=async(p,b)=>{const h={'content-type':'application/json'};if(TOKEN)h.authorization='Bearer '+TOKEN;
+  const r=await fetch(p,b?{method:'POST',headers:h,body:JSON.stringify(b)}:{headers:h});
+  if(r.status===401){location.href='/?signin=1';return []} return r.json()};
 const plus=()=>'<i class="plus tl"></i><i class="plus tr"></i><i class="plus bl"></i><i class="plus br"></i>';
 const state=s=>`<span class="chip ${s}">${esc(String(s).replace(/_/g,' '))}</span>`;
 let view='home';
 function go(v,arg){view=v;document.querySelectorAll('nav a').forEach(a=>a.classList.toggle('on',a.dataset.go===v||(v==='case'&&a.dataset.go==='queue')));render(arg);window.scrollTo(0,0)}
 document.querySelectorAll('[data-go]').forEach(e=>e.onclick=()=>go(e.dataset.go));
 $('#runall').onclick=async e=>{e.target.disabled=true;e.target.textContent='Running…';await api('/api/process',{});e.target.disabled=false;e.target.textContent='Process inbox';go('queue')};
-function render(arg){return ({home,queue,case:caseView,ledger,log:activity,vendor:vendorForm})[view](arg)}
-
-/* ---------- hero animation: a verification run, looping every 12s ---------- */
-function heroAnim(){
-  const T=8, W=1120, H=400, cx=560, cy=200;
-  // left: stacked isometric layers (data sources), deeper = fainter
-  const layers=[0,1,2,3].map(i=>({x:210,y:118+i*46,o:1-i*0.18}));
-  const rh=(x,y,w=118,h=40)=>`M${x-w} ${y} L${x} ${y-h} L${x+w} ${y} L${x} ${y+h} Z`;
-  // centre: ring segments = checks
-  const segs=6, R=74, seg=(i)=>{const a0=(-90+i*60+5)*Math.PI/180,a1=(-90+i*60+55)*Math.PI/180;
-    return `M${(cx+R*Math.cos(a0)).toFixed(1)} ${(cy+R*Math.sin(a0)).toFixed(1)} A${R} ${R} 0 0 1 ${(cx+R*Math.cos(a1)).toFixed(1)} ${(cy+R*Math.sin(a1)).toFixed(1)}`};
-  const kf=(n,a)=>`@keyframes ${n}{0%,${a}%{opacity:.12}${a+4}%,88%{opacity:1}96%,100%{opacity:.12}}`;
-  let css=`.ha .flow{stroke-dasharray:2 22;animation:flow 1.6s linear infinite}@keyframes flow{to{stroke-dashoffset:-48}}
-   .ha .seg{opacity:.12;animation-duration:${T}s;animation-iteration-count:infinite}
-   .ha .lay{animation:lay ${T}s ease-in-out infinite}@keyframes lay{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-   .ha .spin{transform-origin:${cx}px ${cy}px;animation:spin 24s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-   .ha .core{transform-origin:${cx}px ${cy}px;animation:core ${T}s ease-in-out infinite}@keyframes core{0%,40%{transform:scale(.85);opacity:.6}52%,88%{transform:scale(1);opacity:1}100%{transform:scale(.85);opacity:.6}}
-   .ha .land{animation:land ${T}s ease-out infinite}@keyframes land{0%,71%{opacity:.25}75%,90%{opacity:1}100%{opacity:.25}}
-   .ha .rip{transform-origin:910px 200px;transform-box:view-box;animation:rip ${T}s ease-out infinite;opacity:0}@keyframes rip{0%,72%{transform:scale(.4);opacity:0}74%{opacity:.9}92%,100%{transform:scale(2.2);opacity:0}}
-   .ha text{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;fill:#595959}
-   @media (prefers-reduced-motion:reduce){.ha *{animation:none!important}.ha .seg,.ha .land{opacity:1}}`;
-  for(let i=0;i<segs;i++)css+=kf('g'+i,8+i*6);
-  const path0=(l)=>`M${l.x+118} ${l.y} C ${l.x+250} ${l.y}, ${cx-190} ${cy}, ${cx-R-8} ${cy}`;
-  return `<svg class="ha" viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Abstract animation: sources feed a verification core, one payment lands, a duplicate is stopped">
-  <style>${css}</style>
-  <defs>
-    <linearGradient id="gl" x1="0" x2="1"><stop offset="0" stop-color="#09234f" stop-opacity="0"/><stop offset=".55" stop-color="#384ce3"/><stop offset="1" stop-color="#c4f0ff"/></linearGradient>
-    <linearGradient id="gr" x1="0" x2="1"><stop offset="0" stop-color="#c4f0ff"/><stop offset=".5" stop-color="#384ce3"/><stop offset="1" stop-color="#09234f" stop-opacity=".2"/></linearGradient>
-    <linearGradient id="gface" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#384ce3" stop-opacity=".55"/><stop offset="1" stop-color="#09234f" stop-opacity=".9"/></linearGradient>
-    <linearGradient id="gedge" x1="0" x2="1"><stop offset="0" stop-color="#c4f0ff" stop-opacity=".1"/><stop offset=".5" stop-color="#c4f0ff"/><stop offset="1" stop-color="#384ce3" stop-opacity=".3"/></linearGradient>
-    <radialGradient id="gcore"><stop offset="0" stop-color="#c4f0ff"/><stop offset=".45" stop-color="#384ce3"/><stop offset="1" stop-color="#09234f" stop-opacity="0"/></radialGradient>
-    <radialGradient id="gfog" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#384ce3" stop-opacity=".09"/><stop offset=".85" stop-color="#384ce3" stop-opacity="0"/></radialGradient>
-    <linearGradient id="gseg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c4f0ff"/><stop offset="1" stop-color="#384ce3"/></linearGradient>
-  </defs>
-  <rect width="${W}" height="${H}" fill="url(#gfog)"/>
-  <!-- depth grid: perspective floor lines fading to the back -->
-  ${[0,1,2,3,4,5,6].map(i=>`<line x1="${80+i*160}" y1="${H}" x2="${cx+(i-3)*40}" y2="${cy+40}" stroke="url(#gl)" stroke-opacity="${.10+.04*(3-Math.abs(i-3))}"/>`).join('')}
-  <!-- sources -->
-  ${layers.slice().reverse().map((l,ri)=>{const i=layers.length-1-ri;return `<g class="lay" style="animation-delay:${-i*.35}s;opacity:${l.o}">
-     <path d="${rh(l.x,l.y)}" fill="url(#gface)" stroke="url(#gedge)" stroke-width="1.2"/>
-     <path d="${rh(l.x,l.y,70,24)}" fill="none" stroke="#c4f0ff" stroke-opacity=".25"/></g>`}).join('')}
-  ${layers.map((l,i)=>`<path d="${path0(l)}" fill="none" stroke="url(#gl)" stroke-width="${1.6-i*.25}" stroke-opacity="${l.o}"/>
-     <path class="flow" style="animation-delay:${-i*.4}s" d="${path0(l)}" fill="none" stroke="#c4f0ff" stroke-width="2.2" stroke-linecap="round" stroke-opacity="${l.o}"/>`).join('')}
-  <!-- verification core -->
-  <circle class="spin" cx="${cx}" cy="${cy}" r="${R+22}" fill="none" stroke="url(#gl)" stroke-dasharray="1 9" stroke-width="1.5"/>
-  <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#384ce3" stroke-opacity=".15" stroke-width="10"/>
-  ${Array.from({length:segs},(_,i)=>`<path class="seg" style="animation-name:g${i}" d="${seg(i)}" fill="none" stroke="url(#gseg)" stroke-width="10" stroke-linecap="butt"/>`).join('')}
-  <circle class="core" cx="${cx}" cy="${cy}" r="44" fill="url(#gcore)"/>
-  <!-- pay once: one line out, one token lands; a duplicate is stopped at the gate -->
-  <path id="pout" d="M${cx+R+8} ${cy} L 860 ${cy}" stroke="url(#gr)" stroke-width="1.6" fill="none"/>
-  <path id="pdup" d="M${cx+R+4} ${cy+26} C 680 ${cy+26}, 700 ${cy+46}, 760 ${cy+46}" stroke="url(#gr)" stroke-width="1" stroke-opacity=".45" fill="none"/>
-  <line x1="770" y1="${cy+32}" x2="770" y2="${cy+60}" stroke="#09234f" stroke-width="3"/>
-  <rect width="12" height="12" x="-6" y="-6" rx="2" fill="#c4f0ff" stroke="#384ce3">
-    <animateMotion dur="${T}s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;.55;.72;1" calcMode="linear"><mpath href="#pout"/></animateMotion>
-    <animate attributeName="opacity" dur="${T}s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;.54;.56;.72;.74;1"/></rect>
-  <rect width="10" height="10" x="-5" y="-5" rx="2" fill="#384ce3" opacity="0">
-    <animateMotion dur="${T}s" repeatCount="indefinite" keyPoints="0;0;1;1" keyTimes="0;.74;.86;1" calcMode="linear"><mpath href="#pdup"/></animateMotion>
-    <animate attributeName="opacity" dur="${T}s" repeatCount="indefinite" values="0;0;.9;.9;0;0" keyTimes="0;.73;.75;.86;.92;1"/></rect>
-  <g class="land"><path d="${rh(910,cy,62,22)}" fill="url(#gface)" stroke="url(#gedge)" stroke-width="1.2"/>
-    <path d="${rh(910,cy+16,62,22)}" fill="none" stroke="#384ce3" stroke-opacity=".35"/></g>
-  <circle class="rip" cx="910" cy="${cy}" r="30" fill="none" stroke="#384ce3" stroke-width="1.5"/>
-  <text x="210" y="${H-28}" text-anchor="middle">SOURCES</text><text x="${cx}" y="${H-28}" text-anchor="middle">VERIFY</text><text x="910" y="${H-28}" text-anchor="middle">PAY ONCE</text>
-  </svg>`;
-}
-
-/* ---------- architecture diagram (rendered live, not an image) ---------- */
-function diagram(){
-  const N=(x,y,w,t,s,hl)=>`<g><rect x="${x}" y="${y}" width="${w}" height="${s?52:40}" rx="4" fill="${hl?'#384ce3':'rgba(56,76,227,.18)'}" stroke="${hl?'#c4f0ff':'#384ce3'}"/>
-    <text x="${x+12}" y="${y+(s?21:25)}" fill="#fff" font-family="Inter" font-size="13" font-weight="500">${t}</text>${s?`<text x="${x+12}" y="${y+39}" fill="#c4f0ff" font-family="IBM Plex Mono" font-size="10">${s}</text>`:''}</g>`;
-  const A=(x1,y1,x2,y2,l)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#c4f0ff" stroke-width="1" marker-end="url(#ah)"/>${l?`<text x="${(x1+x2)/2+6}" y="${(y1+y2)/2-6}" fill="#c4f0ff" font-family="IBM Plex Mono" font-size="10">${l}</text>`:''}`;
-  const D=(x1,y1,x2,y2)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(196,240,255,.5)" stroke-dasharray="3 4"/>`;
-  return `<svg viewBox="0 0 1120 520" width="100%" role="img" aria-label="System architecture">
-  <defs><marker id="ah" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 8 4 0 8z" fill="#c4f0ff"/></marker></defs>
-  <text x="20" y="16" fill="#c4f0ff" font-family="IBM Plex Mono" font-size="11">01 · INTAKE</text>
-  ${N(20,28,150,'Inbox','.txt · .eml · upload')}${A(170,54,196,54)}
-  ${N(198,28,160,'Classify','invoice · bank change')}${A(358,54,384,54)}
-  ${N(386,28,160,'Extract fields','deterministic rules')}${A(546,54,572,54)}
-  ${N(574,28,170,'Identify vendor','GSTIN › domain › name')}${A(744,54,770,54)}
-  ${N(772,28,150,'Duplicate?','no. · amount · PO')}${A(922,54,948,54,'yes')}
-  ${N(950,28,150,'DUPLICATE','linked to original')}
-  ${A(847,80,847,132,'no')}
-  <text x="20" y="128" fill="#c4f0ff" font-family="IBM Plex Mono" font-size="11">02 · INDEPENDENT CHECKS — EACH RETURNS AN EVIDENCED VERDICT</text>
-  <rect x="20" y="136" width="1080" height="96" fill="none" stroke="rgba(196,240,255,.35)" stroke-dasharray="4 4"/>
-  ${N(36,158,190,'Sender domain','look-alike test')}
-  ${N(240,158,190,'GSTIN binding','check char · PAN type')}
-  ${N(444,158,190,'3-way match','PO · goods receipt')}
-  ${N(648,158,190,'Bank details','verified a/c · holder')}
-  ${N(852,158,232,'Vendor trust · 5.1 + 5.2','real · director · adverse media',true)}
-  ${A(968,210,968,262)}
-  ${N(860,264,224,'Crustdata (live)','identify · enrich · fetch · search')}
-  ${A(560,232,560,300)}
-  <text x="20" y="292" fill="#c4f0ff" font-family="IBM Plex Mono" font-size="11">03 · DECIDE AND ACT</text>
-  ${N(470,302,180,'Aggregate','weights · risk score · reason')}
-  ${A(470,328,326,328,'any fail')}
-  ${N(146,302,178,'HELD','cited reason · draft only')}
-  ${A(560,354,560,384,'all pass')}
-  ${N(470,386,180,'Human approval','irreversible step',true)}
-  ${A(650,412,700,412)}
-  ${N(702,386,170,'Pay once','key = vendor:invoice no.')}
-  ${A(872,412,912,412)}
-  ${N(914,386,170,'Payment ledger','simulated rails')}
-  <text x="20" y="470" fill="#c4f0ff" font-family="IBM Plex Mono" font-size="11">STATE</text>
-  ${N(20,478,330,'SQLite · jobs · steps · invoices · events')}${N(370,478,330,'Response cache + cost ledger (per call)')}${N(720,478,364,'Resume on start: approved → paid, exactly once')}
-  ${D(185,354,185,478)}${D(972,316,535,478)}${D(787,438,902,478)}
-  </svg>`;
-}
+$('#signout').onclick=async()=>{if(sb)await sb.auth.signOut();location.href='/'};
+function render(arg){return ({home,queue,case:caseView,approvals,vendors,ledger,log:activity,vendor:vendorForm,settings})[view](arg)}
 
 async function home(){
   const [inv,pay]=await Promise.all([api('/api/invoices'),api('/api/payments')]);
   const c=s=>inv.filter(r=>r.state===s).length;
-  const steps=[['Identify the vendor','By GSTIN, then sender domain, never by name alone. Look-alike names return several companies at the same confidence.'],
-   ['Prove it is real and who runs it','Crustdata company record by domain, live website, founders and executives, secondary registry listings, each cited with its date.'],
-   ['Screen directors, clear namesakes','Legal and regulatory news only. An article counts when it names the person and the company; otherwise it is cleared with the reason.'],
-   ['Match the money','Invoice against purchase order and goods receipt; a PO cannot be billed twice; duplicates caught across number formats.'],
-   ['Stop bank-detail fraud','Pay only the account verified at onboarding. A change request is held and a call-back to the number on file is drafted, never sent.'],
-   ['Pay once','A person approves. The payment key is vendor and invoice number, so a crash or a retry can never pay twice.']];
-  app.innerHTML=`<section class="hero">${plus()}
-    <div class="lbl" style="margin-bottom:20px">Trust and compliance · Buying and paying</div>
-    <h1>Every vendor proven first.<br>Every invoice paid once.</h1>
-    <p>An accounts-payable desk for an Indian 3PL that verifies who it is paying on live data, holds anything it cannot prove with a cited reason, and lets a person approve the one step that cannot be undone.</p>
-    <div style="display:flex;gap:10px;justify-content:center"><button class="btn fill" onclick="go('queue')">Open the inbox</button><button class="btn" onclick="document.getElementById('arch').scrollIntoView({behavior:'smooth'})">How it works</button></div>
-    <div class="animwrap">${heroAnim()}<div class="lbl" style="margin-top:4px;font-size:10px">Illustration</div></div>
-  </section>
+  const waiting=inv.filter(r=>r.state==='awaiting_approval'), held=inv.filter(r=>r.state==='held');
+  app.innerHTML=`<div class="toolbar"><div><div class="lbl">Dashboard</div><h2 class="sec" style="margin:6px 0 0">Good to see you${ME&&ME.email?', '+esc(ME.email.split('@')[0]):''}.</h2></div></div>
   <div class="stats">
     <div class="stat"><div class="lbl">Documents</div><div class="n">${inv.length}</div></div>
     <div class="stat"><div class="lbl">Paid once</div><div class="n">${c('paid')}</div></div>
-    <div class="stat"><div class="lbl">Awaiting approval</div><div class="n">${c('awaiting_approval')}</div></div>
-    <div class="stat"><div class="lbl">Held with reason</div><div class="n">${c('held')}</div></div>
+    <div class="stat"><div class="lbl">Awaiting approval</div><div class="n">${waiting.length}</div></div>
+    <div class="stat"><div class="lbl">Held with reason</div><div class="n">${held.length}</div></div>
     <div class="stat"><div class="lbl">Duplicates stopped</div><div class="n">${c('duplicate')}</div></div>
   </div>
-  <section class="field" id="arch">${plus()}<div class="lbl">System architecture</div><h2>From request to result, with a person at the irreversible step.</h2>${diagram()}</section>
-  <div class="two"><div><div class="lbl">The job</div><h2 class="sec" style="margin-top:8px">What the desk does, in order.</h2>
-    <p class="muted">Outsourced accounting firms and KYB vendors are paid for this today, per invoice and per business checked. A new vendor check costs 7–8 Crustdata credits; later invoices from the same vendor cost nothing.</p></div>
-    <div class="rows">${steps.map((s,i)=>`<div class="rowi"><span class="i" style="text-align:left">0${i+1}</span><span class="t">${s[0]}</span><span class="d">${s[1]}</span><span></span></div>`).join('')}</div></div>
-  <div class="panel"><span class="lbl">Paid so far</span><div class="mono" style="font-size:20px">${inr(pay.reduce((a,r)=>a+r.amount_inr,0))} · ${pay.length} payment(s)</div></div>`;
+  <div class="two" style="margin-top:0">
+   <div class="panel" style="margin:0"><span class="lbl">Needs your approval</span>${waiting.length?`<table>${waiting.map(r=>`<tr class="row" data-k="${esc(r.invoice_key)}"><td class="mono small">${esc(r.invoice_no)}</td><td>${esc(r.vendor_id)}</td><td class="mono small">${inr(r.amount_inr)}</td></tr>`).join('')}</table>`:'<div class="muted">Nothing waiting.</div>'}</div>
+   <div class="panel" style="margin:0"><span class="lbl">Held for review</span>${held.length?`<table>${held.slice(0,6).map(r=>`<tr class="row" data-k="${esc(r.invoice_key)}"><td class="mono small">${esc(r.invoice_no||r.doc_type.replace(/_/g,' '))}</td><td class="small muted">${esc((r.reason||'').slice(0,90))}</td></tr>`).join('')}</table>`:'<div class="muted">Nothing held.</div>'}</div>
+  </div>
+  <div class="panel" style="margin-top:32px"><span class="lbl">Paid so far</span><div class="mono" style="font-size:20px">${inr(pay.reduce((a,r)=>a+r.amount_inr,0))} · ${pay.length} payment(s)</div></div>`;
+  document.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>go('case',tr.dataset.k));
+}
+
+async function approvals(){
+  const inv=await api('/api/invoices'); const w=inv.filter(r=>r.state==='awaiting_approval'), h=inv.filter(r=>r.state==='held');
+  const t=(rows,empty)=>rows.length?`<table><tr><th>Document</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Reason</th></tr>${rows.map(r=>`<tr class="row" data-k="${esc(r.invoice_key)}"><td class="mono small">${esc(r.invoice_no||r.doc_type.replace(/_/g,' '))}</td><td>${esc(r.vendor_id)}</td><td class="mono small">${inr(r.amount_inr)}</td><td>${state(r.state)}</td><td class="small muted">${esc((r.reason||'').slice(0,120))}</td></tr>`).join('')}</table>`:`<div class="muted">${empty}</div>`;
+  app.innerHTML=`<div class="toolbar"><h2 class="sec" style="margin:0">Approvals</h2></div>
+  <p class="muted" style="margin-top:-8px">Payments wait here for a person. Your approval is recorded against your signed-in identity${ME&&ME.email?` (<span class="mono">${esc(ME.email)}</span>)`:''}.</p>
+  <div class="panel"><span class="lbl">Payments awaiting approval</span>${t(w,'Nothing waiting for approval.')}</div>
+  <div class="panel"><span class="lbl">Held: needs a decision or a call-back</span>${t(h,'Nothing held.')}</div>`;
+  document.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>go('case',tr.dataset.k));
+}
+
+async function vendors(){
+  const v=await api('/api/vendors');
+  app.innerHTML=`<div class="toolbar"><h2 class="sec" style="margin:0">Vendors</h2></div>
+  <p class="muted" style="margin-top:-8px">Your vendor master. Bank details are the ones verified at onboarding; only these are ever paid.</p>
+  <div style="overflow-x:auto"><table><tr><th>ID</th><th>Legal name</th><th>Domain</th><th>GSTIN</th><th>Verified account</th><th>Vendor check</th><th></th></tr>
+  ${v.map(x=>`<tr><td class="mono small">${esc(x.vendor_id)}</td><td>${esc(x.legal_name)}</td><td class="mono small">${esc(x.domain||'')}</td><td class="mono small">${esc(x.gstin||'—')}</td>
+   <td class="mono small">${esc(x.bank?.account_no)} · ${esc(x.bank?.ifsc)}<div class="ev">verified ${esc(x.bank?.verified_on)}</div></td><td>${x.trust?state(x.trust.toLowerCase()==='clear'?'paid':x.trust.toLowerCase()==='hold'?'held':'rejected').replace(/>[^<]+</,'>'+esc(x.trust.replace(/_/g,' '))+'<'):'<span class="muted small">not run</span>'}</td>
+   <td><button class="btn" data-v="${esc(x.legal_name)}" data-w="${esc(x.domain||'')}" data-d="${esc(x.director||'')}">Check now</button></td></tr>`).join('')}</table></div>`;
+  document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{go('vendor');setTimeout(()=>{$('#vn').value=b.dataset.v;$('#vw').value=b.dataset.w;$('#vd').value=b.dataset.d},0)});
+}
+
+async function settings(){
+  const s=await api('/api/settings');
+  const f=[['max_credits_per_job','Cost limit per job','credits'],['max_seconds_per_job','Time limit per job','seconds'],['auto_approve_below_inr','Auto-approve payments below','₹ (0 = every payment needs a person)'],['min_age_years','Flag companies younger than','years'],['min_headcount','Flag headcount below','people']];
+  app.innerHTML=`<div class="toolbar"><h2 class="sec" style="margin:0">Settings</h2></div>
+  <p class="muted" style="margin-top:-8px">Limits and rules for every run. Changes apply to the next job and are written to the activity log with your identity.</p>
+  <div class="panel" style="max-width:640px">${f.map(([k,l,u])=>`<div style="display:grid;grid-template-columns:1fr 140px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)"><div>${l}<div class="ev">${u}</div></div><input id="s_${k}" value="${esc(s[k])}"></div>`).join('')}
+  <div style="margin-top:16px"><button class="btn fill" id="save">Save settings</button> <span id="m" class="small muted"></span></div></div>`;
+  $('#save').onclick=async()=>{const b={};f.forEach(([k])=>b[k]=$('#s_'+k).value);const r=await api('/api/settings',b);$('#m').textContent=r.ok?'Saved.':(r.error||'')};
 }
 
 async function queue(){
@@ -289,7 +117,7 @@ async function caseView(key){
   <section class="console">
    <div><div class="lbl">Decision</div><h2>${state(c.invoice.state)}</h2><div>${esc(d.reason)}</div>
     ${c.payment?`<div class="mono small" style="margin-top:12px">Paid ${inr(c.payment.amount_inr)} → ${esc(c.payment.payee)} · a/c ${esc(c.payment.account)} · ref ${esc(c.payment.ref)} · approved by ${esc(c.payment.approved_by)}</div>`:''}
-    <div class="toolbar" style="margin:16px 0 0">${canPay?`<input id="who" value="AP lead" aria-label="Approver"><button class="btn fill" id="pay">Approve and pay ${inr(x.amount_inr)}</button>`:''}${canRe?`<button class="btn" id="re">Replay checks</button>`:''}<span id="m" class="small"></span></div></div>
+    <div class="toolbar" style="margin:16px 0 0">${canPay?`<input id="who" value="${esc(ME&&ME.email?ME.email:'AP lead')}" aria-label="Approver" ${ME&&ME.email?'readonly':''}><button class="btn fill" id="pay">Approve and pay ${inr(x.amount_inr)}</button>`:''}${canRe?`<button class="btn" id="re">Replay checks</button>`:''}<span id="m" class="small"></span></div></div>
    <div><div class="lbl">Risk score</div><div class="big">${d.risk_score??0}</div><div class="bar"><i style="width:${d.risk_score??0}%"></i></div></div>
    <div><div class="lbl">Cost of this job</div><div class="big">${t?t.cost.credits:0}</div><div class="mono small">credits${t?` · ₹${t.cost.inr}`:''}</div></div>
   </section>
@@ -314,7 +142,7 @@ async function ledger(){
   app.innerHTML=`<div class="toolbar"><h2 class="sec" style="margin:0">Payment ledger</h2></div>
   <p class="muted" style="margin-top:-8px">Simulated payment rails. One row per invoice: the idempotency key is the primary key, so a retry, restart or second approval cannot add a row.</p>
   <div style="overflow-x:auto"><table><tr><th>Paid at</th><th>Idempotency key</th><th>Payee</th><th>Account</th><th>Amount</th><th>Approved by</th><th>Ref</th></tr>
-  ${p.map(r=>`<tr><td class="mono small">${ts(r.paid_at)}</td><td class="mono small">${esc(r.idempotency_key)}</td><td>${esc(r.payee)}</td><td class="mono small">${esc(r.account)} / ${esc(r.ifsc)}</td><td class="mono small">${inr(r.amount_inr)}</td><td>${esc(r.approved_by)}</td><td class="mono small">${esc(r.ref)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">No payments yet.</td></tr>'}
+  ${p.map(r=>`<tr><td class="mono small">${ts(r.paid_at)}</td><td class="mono small">${esc(r.idempotency_key)}</td><td>${esc(r.payee)}</td><td class="mono small">${esc(r.account)} / ${esc(r.ifsc)}</td><td class="mono small">${inr(r.amount_inr)}</td><td class="mono small">${esc(r.approved_by)}</td><td class="mono small">${esc(r.ref)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">No payments yet.</td></tr>'}
   <tr><td colspan=4 class="lbl" style="border-bottom:0">Total paid</td><td class="mono" style="border-bottom:0">${inr(p.reduce((a,r)=>a+r.amount_inr,0))}</td><td colspan=2 style="border-bottom:0"></td></tr></table></div>`;
 }
 async function activity(){
@@ -332,8 +160,19 @@ function vendorForm(){
    ${r.flags.length?`<div class="panel"><span class="lbl">Flags</span>${r.flags.map(f=>`<div class="${f.severity==='red'?'fail':'warn'}">● ${esc(f.reason)}</div>`).join('')}</div>`:''}
    ${r.cannot_verify.length?`<div class="panel"><span class="lbl">Cannot verify</span>${r.cannot_verify.map(m=>`<div class="warn">○ ${esc(m)}</div>`).join('')}</div>`:''}`};
 }
-window.go=go; render();
-new MutationObserver(()=>{const s=document.querySelector('svg.ha');if(s&&matchMedia('(prefers-reduced-motion: reduce)').matches)s.pauseAnimations()}).observe(app,{childList:true});
+window.go=go;
+(async()=>{
+  if(window.SUPA&&SUPA.required){
+    if(!sb){app.innerHTML='<div class="fail">Sign-in library failed to load.</div>';return}
+    const {data}=await sb.auth.getSession();
+    if(!data.session){location.href='/?signin=1';return}
+    TOKEN=data.session.access_token;
+    sb.auth.onAuthStateChange((_e,sess)=>{TOKEN=sess?sess.access_token:null});
+  }
+  ME=await api('/api/me'); $('#who').textContent=ME&&ME.email?ME.email:'local mode';
+  if(!(window.SUPA&&SUPA.required))$('#signout').style.display='none';
+  render();
+})();
 </script>
 </body>
 </html>
