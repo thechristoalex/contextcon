@@ -263,7 +263,8 @@ def check_duplicate(key, x, v):
     # same vendor, same amount, same date, different number -> likely re-issued duplicate
     for r in store.db().execute("SELECT invoice_key, extracted_json, state FROM invoices WHERE vendor_id=?", (v["vendor_id"],)):
         e = json.loads(r["extracted_json"])
-        if e.get("amount_inr") == x.get("amount_inr") and e.get("invoice_date") == x.get("invoice_date") and e.get("po_no") == x.get("po_no") and r["state"] not in ("rejected",):
+        # a row already marked duplicate is a copy, never the original: replaying the original must not match its own copy
+        if e.get("amount_inr") == x.get("amount_inr") and e.get("invoice_date") == x.get("invoice_date") and e.get("po_no") == x.get("po_no") and r["state"] not in ("rejected", "duplicate"):
             return chk("duplicate", "fail", f"Same vendor, amount ₹{x.get('amount_inr'):,.2f}, date {x.get('invoice_date')} and PO as invoice {r['invoice_key']} (state {r['state']}): a re-issued duplicate under a new number.",
                        [{"source": "invoice ledger", "field": "invoice_key", "value": r["invoice_key"]}], weight=100), r["invoice_key"]
     return chk("duplicate", "pass", "No earlier invoice with this number, or with the same vendor, amount, date and PO", weight=0), None

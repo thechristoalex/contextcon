@@ -239,6 +239,7 @@ def serve(port=8080):
         print(f"resumed {len(again)} payment(s) made")
     from . import scan
     threading.Thread(target=scan.warm, daemon=True).start()  # load the bill reader before the first scan
-    srv = ThreadingHTTPServer(("127.0.0.1", port), H)
+    # the default listen backlog is 5; a screen that loads 20 documents at once must not have connections refused
+    srv = type("Server", (ThreadingHTTPServer,), {"request_queue_size": 128, "daemon_threads": True})(("127.0.0.1", port), H)
     print(f"Vendor Trust + Payables Desk on http://127.0.0.1:{port}")
     srv.serve_forever()
