@@ -47,6 +47,24 @@ def vendor_hash(v):
 # ---------------- extraction (deterministic: same text -> same fields) ----------------
 
 AMOUNT_RE = re.compile(r"(?:total|amount(?: due| payable)?|grand total|invoice value|net payable|amount payable)\s*[:\-]?\s*(?:inr|rs\.?|₹)?\s*([\d,]+(?:\.\d{1,2})?)", re.I)
+# the amount owed is the final total after tax; "Invoice Amount" or "Taxable Value" on a GST bill can be a pre-tax subtotal
+FINAL_AMOUNT_RE = re.compile(r"(?:total\s+invoice\s+value|grand\s+total|total\s+amount\s+payable|total\s+payable|net\s+payable|amount\s+payable|total\s+amount\s+due)"
+                             r"\s*[:\-]?\s*(?:inr|rs\.?|₹)?\s*([\d,]+(?:\.\d{1,2})?)", re.I)
+COMPANY_LINE_RE = re.compile(r"^\s*([A-Z][A-Za-z0-9&.,'()\- ]{2,80}?\b(?:Private\s+Limited|Pvt\.?\s+Ltd\.?|Limited|Ltd\.?|LLP))\s*$", re.M)
+SKIP_HEAD_RE = re.compile(r"^\s*(?:tax invoice|invoice|bill of supply|original|duplicate|scanned-from:|from:|to:|subject:|date:)", re.I)
+
+
+def issuer_from_header(text):
+    """A GST bill prints its issuer's name as a heading, not after 'Vendor:'. Take the first line that ends in a
+    company suffix, among the lines before the buyer block ('To:', 'Bill to', 'Billed to'). None if there is none."""
+    head = re.split(r"(?im)^\s*(?:to\s*:|bill(?:ed)?\s+to\b|ship(?:ped)?\s+to\b|buyer\b)", text, maxsplit=1)[0]
+    for line in head.splitlines()[:12]:
+        if SKIP_HEAD_RE.match(line):
+            continue
+        m = COMPANY_LINE_RE.match(line)
+        if m:
+            return re.sub(r"\s+", " ", m.group(1)).strip()
+    return None
 
 
 def _find(pat, text, flags=re.I):
@@ -79,16 +97,17 @@ def classify(text):
 
 def extract(text):
     amt = None
-    m = AMOUNT_RE.search(text)
+    m = FINAL_AMOUNT_RE.search(text) or AMOUNT_RE.search(text)
     if m:
         amt = float(m.group(1).replace(",", ""))
+    site = _find(r"\b(?:https?://)?www\.([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9\-]+)+)\b", text)
     sender = _find(r"^from:\s*.*?<?([\w.+-]+@[\w.-]+)>?\s*$", text, re.I | re.M)
     return {
         "doc_type": classify(text),
         "sender": sender.lower() if sender else None,
         "sender_domain": sender.split("@")[1].lower() if sender else None,
         "invoice_no": _find(r"(?:invoice|bill)\s*(?:no\.?|number|#)\s*[:\-]?\s*([A-Za-z0-9/\-_.]+)", text),
-        "invoice_date": _find(r"(?:invoice\s*)?date\s*[:\-]\s*([0-9]{1,2}[\s/\-][A-Za-z0-9]{1,9}[\s/\-][0-9]{2,4})", text),
+        "invoice_date": _find(r"(?:invoice\s*)?date\s*[:\-]?\s*([0-9]{1,2}[\s/\-.][A-Za-z0-9]{1,9}[\s/\-.][0-9]{2,4})", text),
         "gstin": (_find(r"gstin\s*(?:no\.?)?\s*[:\-]?\s*([0-9A-Z]{15})", text) or "").upper() or None,
         # a PO number written out ("PO-1001") wins over a labelled value, so "Ref PO-1001" is not read as "1001"
         "po_no": (_find(r"\b(PO-\d{3,})\b", text, 0)
@@ -98,7 +117,9 @@ def extract(text):
         "account_no": _find(r"(?:a/?c|account)\s*(?:no\.?|number)\s*[:\-]?\s*([0-9]{9,18})", text),
         "ifsc": (_find(r"ifsc\s*(?:code)?\s*[:\-]?\s*([A-Za-z]{4}0[A-Za-z0-9]{6})", text) or "").upper() or None,
         "account_name": _find(r"(?:account name|beneficiary(?: name)?|a/?c name)\s*[:\-]\s*(.+?)(?=\s{2,}|$)", text, re.I | re.M),
-        "vendor_name_text": _find(r"^(?:vendor|supplier|from company|billed by)\s*[:\-]\s*(.+?)(?=\s{2,}|$)", text, re.I | re.M),
+        "vendor_name_text": (_find(r"^(?:vendor|supplier|from company|billed by)\s*[:\-]\s*(.+?)(?=\s{2,}|$)", text, re.I | re.M)
+                             or issuer_from_header(text)),
+        "website_text": site.lower() if site else None,   # the issuer's site printed on the bill, e.g. www.dtdc.com
         "description": _find(r"^(?:description|particulars|services?)\s*[:\-]\s*(.+)$", text, re.I | re.M),
     }
 
@@ -354,6 +375,7 @@ def bill_request(x):
     name = (x.get("vendor_name_text") or x.get("account_name") or "").strip() or None
     domain = x.get("sender_domain")
     domain = None if not domain or domain in FREE_MAIL else domain
+    domain = domain or x.get("website_text")   # a paper bill has no sender, but often prints the issuer's website
     if not name and not domain:
         return None
     gstin = x.get("gstin")
@@ -390,9 +412,14 @@ def check_unknown_vendor(x):
                     "Not the same as 'no record'; held until it can be checked", weight=50)], None
     ev = [{"claim": f["claim"], "value": f["value"], "source": f["source"]} for f in rep["facts"]]
     who = (rep.get("entity") or {}).get("name") or req["vendor_name"] or req["website"]
+    sender = x.get("sender_domain")
+    printed = req["website"] and req["website"] == x.get("website_text") and (not sender or sender in FREE_MAIL)
+    # a website printed on a bill is the bill's own claim: anyone can print www.bigcompany.com on a fake invoice
+    caveat = (f" The website {req['website']} was printed on the bill, so this shows the company exists, not that the bill came from it: "
+              "confirm on a number from the company's own website before adding it.") if printed else ""
     if rep["verdict"] == "CLEAR":
         out = [chk("background_check", "warn", f"{who} appears to be a real, active company ({rep['summary']}), but it is not a vendor on file. "
-                   "Add it to the vendor master before paying", ev)]
+                   "Add it to the vendor master before paying." + caveat, ev)]
     else:
         why = "; ".join([f["reason"] for f in rep["flags"]] + rep["cannot_verify"]) or rep["summary"]
         out = [chk("background_check", "fail", f"Background check on {who}: {rep['verdict'].replace('_', ' ').lower()}. {why}", ev, weight=20)]

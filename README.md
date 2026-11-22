@@ -9,7 +9,14 @@ after a person approves**, or **holds the invoice with a cited reason**. It also
 from a photo on the local machine and reconciles bank-statement lines.
 
 Design, invariants, schema and failure model: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
-Diagram: [architecture (Mermaid)](https://mermaid.ink/img/pako:eNptVVFv4jgQ_isjXm5XpKDd072gUysILKCyNEdYtKtcH0wyBF8dO7IdWoT6329sJ7SV9gUHe-bzzDffjC-9XBXYG0HvINRzfmTawmrzrwRYrrOl3KuXEQzsi4UhDLAStDS1UKx4hJubW4hXWSyYMfxwHgGXJ8VzJJM9k09AWLJ0_zTmyGvrvyouC9SPDj9eeYjZz2z2YjXLLRw4isKMoECLmiy5sTwnpxJfvMfsp_fYLbNlgdLSpXBCWSg9gnm6Xa4jsEeUYNDdAYWqGJftnmQVeozd0mNMfySXKWXCc2bx7u-9Ht5KpSsmuMHimolUg8ifKQ2GENrr-qxSjbT9gnz7ycOrwyVAAoYzmoCf0cZqGY-3s8d3x1IF2haz-D51-6bZl5rVx3YLiPICa5eAtMQg5k8mAmT5kWiwjZYGmAQ8cTrPKdAT6oLn1l8BkGbp-9ThZNqA243WbJ55tgK8K5OOIBmvwZ5rjGBPFeKyBKs654oZ29YM4Hv2580zO9OmzY8jSB4iKJUqTFdlgnqgNC0woZEVZ8ITAovWe5JNnDSowIwLEwLUnOpeAMtzRyrlV8BRCZfGtWgA22wXgrG6MRb-GnyBPv1-9cd04pZt4HaafYqdEVWHkSg7pezPV0Wg1Dw_RvCMezig7T4NMp0fPwdxhnI4wPF8no3LkmRI5R6RJS-PlqqiuXkCkytNpFGqRgV-ydxVmskzHCjJYSPZiVa2Fzh8Zlp6zEW2mK2mlEKh2cFS9hUaw0r8gCAE1NRbIYjksmgqqj2ra61OTHjRjb2owhZ6u2T8K0uoPIrkMaIWTmebLTzhma7YX7vlnbz9heTknVfZp5RXjWAuopqdKydCKl6JumVlCjcDkh_qM-QuvoHzmjnGlelMKSuNplbSIBmRyD4y2vmTpmrvn27p2n9W3JH7n9oTs-6IljZM-qLhwAkvcq7Sms9v8wMa6WTm2KX5Qu0VWjOQ7KwmaZCcsZSVTyhOd2F4Te6zFZfo6KGZQ8cUuUUadf0OpQ8qzxutXbP5OdCJuqZ0sbgD88RrH8zkPkBOL6mbEw4tchQiLQEs-If-ZVpwIkrQ7Xe-kJPp--GxeNtqB8YkcVVFYuhDTxIhgli-yv2qdn9ZnwpSMuHbCA5aVW4UQq6qmsT5hwH1TLOSaA8JJL8vbXfmQzGq0aQbg9YKipUHnuNdFo_X64ct7Gab5bdfERxpjsOBwmRQo-46w8Pcwia-rGfftsPNdp4Ol9-T1AdL44Z1ySlJT4FoqdnE7nI_btCz18r9TaFeum-mTgS_M1m8meRMFySXH0l4DOYk_MRX1E29VsXtPHJa60XQq-hFYrygh_LSIxor_2QWeGCNsL3X1_8BbgldtA).
+
+| Diagram | Public link |
+|---|---|
+| System architecture | https://github.com/thechristoalex/contextcon/blob/main/docs/system-context.png |
+| Agent flow (invoice and bank-line paths) | https://github.com/thechristoalex/contextcon/blob/main/docs/agent-flow.png |
+| Invoice state machine | https://github.com/thechristoalex/contextcon/blob/main/docs/invoice-state-machine.png |
+| Vendor check pipeline | https://github.com/thechristoalex/contextcon/blob/main/docs/vendor-check.png |
+| Business value chain | https://github.com/thechristoalex/contextcon/blob/main/docs/value-chain.png |
 
 | | |
 |---|---|
@@ -32,7 +39,7 @@ python3 -m vendorcheck.cli scan path/to/bill.jpg
 python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv
 python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
 python3 -m vendorcheck.cli serve --port 8080   # landing at /, app at /app
-python3 -m unittest discover tests         # 106 tests, offline, no keys, no credits
+python3 -m unittest discover tests         # 108 tests, offline, no keys, no credits
 ```
 
 Crash test: `CRASH_AFTER_APPROVE=1 python3 -m vendorcheck.cli approve <key> --by X`, then `… resume`.

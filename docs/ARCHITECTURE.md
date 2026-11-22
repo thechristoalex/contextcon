@@ -43,6 +43,11 @@ never repeats a paid API call or a payment.
 | `procure/core.py` | 130 | `tx()`, compare-and-set `StateMachine`, in-process `EventBus`, audit table |
 | `procure/api.py` | 142 | Router for `/api/procure/*` and `/api/portal/*` |
 
+![System architecture](system-context.png)
+
+Further diagrams: [agent flow](agent-flow.png), [invoice state machine](invoice-state-machine.png),
+[vendor check](vendor-check.png), [value chain](value-chain.png).
+
 ## 1. Design invariants
 
 These hold for every code path. The tests in `tests/` assert them.
@@ -156,6 +161,13 @@ Jev is a typed classifier: each question is `noul` (P(yes)), `choice` (option + 
                                                                         PAID
 ```
 
+Extraction (`extract`) is regex over the text. The amount prefers the final post-tax total
+(`total invoice value|grand total|… payable|total amount due`) over a bare `amount`/`total`, because on
+a GST bill "Invoice Amount" can be the pre-tax subtotal. With no `Vendor:` label, the issuer is taken
+from the first company-suffixed heading line above the buyer block (`issuer_from_header`). A printed
+`www.` site becomes `website_text`. For an unknown sender with no company email, `bill_request` uses it
+as the domain to look up, and the check reports it as the bill's own claim.
+
 Terminal rows are written by `_finish` with `INSERT … ON CONFLICT(invoice_key) DO NOTHING`, so a
 replayed document cannot overwrite a decided invoice.
 
@@ -236,7 +248,7 @@ report. `BudgetExceeded` and `TimeoutError` end the job as `CANNOT_VERIFY` namin
 | Step | Calls | Logic |
 |---|---|---|
 | GSTIN (no step) | 0 | Check character, state code → state, PAN holder type. "Limited"/"LLP" on a non-C/F PAN → amber |
-| `resolve` | identify ×1 | **By domain**: candidates whose domains include the input domain. 1 → chosen; >1 → rank by name similarity, others flagged as duplicate records. **By name only**: accept only if exactly one match has confidence ≥ 0.95 *and* name similarity ≥ 0.99; otherwise `CANNOT_VERIFY` listing candidates. Name vs domain-owner similarity < 0.5 → red (impersonation) |
+| `resolve` | identify ×1 | **By domain**: candidates whose domains include the input domain. 1 → chosen; >1 → rank by name similarity, others flagged as duplicate records; 0 (records answer to the domain but none lists it, e.g. `dtdc.com`) → accept only if exactly one has confidence ≥ 0.95 *and* the exact legal name (`via = domain + exact name`). **By name only**: accept only if exactly one match has confidence ≥ 0.95 *and* name similarity ≥ 0.99; otherwise `CANNOT_VERIFY` listing candidates. Name vs domain-owner similarity < 0.5 → red (impersonation) |
 | `profile` | enrich ×1 | `basic_info, headcount, locations, people, news, funding`. Dataset status ≠ active → red; age < 1 y, headcount < 5, named director absent from founders/CXOs → amber. Profile news titles matched against `ADVERSE_TERMS` + company token → red |
 | `website` | fetch ×1–4 | Order: URL, `www.` twin, then each with `human_mode`. Stop at the first response with ≥ 200 chars of visible text. Never a different registrable domain. Regex "for sale/parked" → red. Jev: parked → red; uses the name but is not the company's site → amber |
 | `registry` | search ×1 + fetch ×k | `"<legal name>" CIN`. Keep results whose title+snippet contain every name token, regex the CIN, **fetch the page** and require the CIN as a whole word in visible text. Exactly one distinct CIN → fact (strength `secondary`); several → `cannot_verify`; redirect-only → `cannot_verify` |
@@ -492,7 +504,7 @@ Startup: open DB → `ap.resume()` → `PayablesService.resume()` → background
 
 ## 11. Testing
 
-`python3 -m unittest discover tests` runs 106 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
+`python3 -m unittest discover tests` runs 108 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
 removes `TYPESAFE_API_KEY` before import. Crustdata is replaced by canned responses keyed by endpoint.
 Each test case runs against a fresh `tempfile.mkdtemp()` database and data directory.
 
@@ -500,8 +512,8 @@ Each test case runs against a fresh `tempfile.mkdtemp()` database and data direc
 |---|---:|---|
 | `test_bill.py` | 29 | Parser on stored OCR output of real TallyPrime/Vyapar photos and public samples (`data/fixtures/ocr/`) |
 | `test_scan.py` | 23 | Rows, tilt, rupee/GSTIN repair, provenance, legibility; 2 run the real reader on `data/fixtures/bills/` |
-| `test_background.py` | 21 | Unknown-sender checks, PAN types, free mail, GSTIN-only, outage + replay, www fallback |
-| `test_payables.py` | 9 | Every inbox outcome, idempotent re-run, crash-resume, vendor-hash guard, outage hold |
+| `test_background.py` | 22 | Unknown-sender checks, PAN types, free mail, GSTIN-only, outage + replay, www fallback |
+| `test_payables.py` | 10 | Every inbox outcome, idempotent re-run, crash-resume, vendor-hash guard, outage hold |
 | `test_bank.py` | 9 | Statement end to end, legal-name rules, re-import, one-payment reconciliation, budget |
 | `test_procure.py` | 10 | Onboarding flow and front-company block, shared bank account, invoice-number formats, file re-upload, key replay/misuse, crash after transfer, 6 concurrent payments → 1 recorded, bank change before transfer |
 | `test_website.py` | 5 | Fetch fallback order and human_mode |
