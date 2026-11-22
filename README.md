@@ -81,6 +81,25 @@ In the app, **Scan a bill** (on the Dashboard and the Inbox) opens the camera: h
 - **Every field cites the photo.** The case view shows the photo with the line each field came from outlined, its row and its confidence.
 - **Never guessed.** A bill whose invoice number, amount, or GSTIN and vendor name cannot be read is held as "cannot read". A field read below `min_read_confidence` (Settings, default 0.5) holds the bill for a person to compare. A GSTIN that fails its check character is reported as "misread or not real", not as fake. A rupee sign misread as another currency sign is corrected only when it sits directly before a number.
 - **Read once.** Files are keyed by the photo's hash: the same photo again is answered from its stored reading, and a second photo of the same bill ends as `DUPLICATE`.
+- **Read as an Indian GST invoice** (`vendorcheck/bill.py`):
+  - **Parties:** seller, buyer (bill to) and consignee (ship to), each with its own GSTIN and state.
+  - **Invoice details:** number, invoice and due dates, place of supply, PO, IRN, Ack no and date, and e-way bill.
+  - **Items:** read column by column, including two-line rows and two-row headers.
+  - **Tax and total:** taxable value, CGST, SGST, IGST and cess with their rates, round-off, the total, and the total in words.
+  - **Bank:** account holder, account number, IFSC, bank, branch and UPI ID.
+- **Checked against the bill itself.** Printed values are tested against each other:
+  - GSTIN check character, and the IFSC format.
+  - Taxable value plus tax equals the total, and the total in words equals the total in figures.
+  - CGST equals SGST, and each tax rate matches the taxable value.
+  - Intra-state bills charge CGST and SGST; inter-state bills charge IGST.
+  - The bank account holder is the seller.
+
+  The total is chosen by this evidence, never by position, so a "Previous balance" or "Sub total" is never taken for it. An invalid GSTIN or IFSC is shown as printed, with the reason it fails.
+- **Jev as a second opinion.** Where the code finds more than one candidate (which GSTIN is the seller's, which name is the seller, which amount is the total, which number is the invoice number, which date is the invoice date), Jev picks one. It never sees GSTIN, account or phone numbers.
+  - **Agreement** marks the field confirmed.
+  - **Disagreement** holds the bill for a person, unless the words, the arithmetic or the check character already settle it.
+  - **If Jev is unavailable,** the rules stand.
+- **Benchmarked** on real photos of TallyPrime and Vyapar invoices and on public sample invoices (IndiaFilings, GSTZen), whose reader output is kept in `data/fixtures/ocr/` for `python3 -m unittest tests.test_bill -v`.
 
 Tests: `python3 -m unittest tests.test_scan -v` (15 run anywhere with a fake reader; 2 use the real reader on the test photos in `data/fixtures/bills/`, made by `tests/make_bills.swift`).
 
