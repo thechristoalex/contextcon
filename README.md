@@ -10,7 +10,7 @@ from a photo on the local machine and reconciles bank-statement lines.
 
 ## ▶ Demo video (2 minutes)
 
-[![Watch the 2-minute demo](docs/demo-thumb.jpg)](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)
+[![Watch the 2-minute demo](docs/demo.gif)](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)
 
 **[▶ Watch the demo on Google Drive](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)**. GitHub cannot play Drive videos inline, so the picture links to the player.
 
