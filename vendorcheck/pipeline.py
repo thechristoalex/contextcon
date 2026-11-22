@@ -66,6 +66,37 @@ def gstin_valid(g):
     return chars[(36 - s % 36) % 36] == g[14]
 
 
+# PAN 4th character: the kind of holder (Income Tax Department PAN structure)
+PAN_TYPES = {"C": "company", "F": "firm or LLP", "P": "individual", "H": "Hindu undivided family", "T": "trust",
+             "A": "association of persons", "B": "body of individuals", "G": "government",
+             "L": "local authority", "J": "artificial juridical person"}
+
+
+def gstin_profile(g):
+    """What a GSTIN says about itself, with no API call: validity, state, PAN and the PAN holder type."""
+    g = (g or "").strip().upper()
+    if not g:
+        return None
+    pan = g[2:12] if len(g) >= 12 else None
+    code = pan[3] if pan else None
+    return {"gstin": g, "valid": gstin_valid(g), "state_code": g[:2], "state": GST_STATES.get(g[:2]),
+            "pan": pan, "pan_type_code": code, "pan_type": PAN_TYPES.get(code)}
+
+
+_COMPANY_WORDS = re.compile(r"\b(?:private\s+limited|pvt\.?\s*ltd\.?|limited|ltd\.?)(?=\W|$)", re.I)
+_LLP_WORDS = re.compile(r"\bl\.?l\.?p\b\.?", re.I)
+
+
+def entity_type_mismatch(name, pan_type_code):
+    """A name that says company or LLP on a PAN of another kind. None when they agree or the name says neither."""
+    if not name or not pan_type_code:
+        return None
+    said, want = (("LLP", "F") if _LLP_WORDS.search(name) else ("company", "C") if _COMPANY_WORDS.search(name) else (None, None))
+    if not said or pan_type_code == want:
+        return None
+    return f"Name says {said} but the PAN in the GSTIN belongs to {PAN_TYPES.get(pan_type_code, 'an unknown holder type')} (4th character {pan_type_code})"
+
+
 def job_id_for(req):
     if req.get("request_id"):
         return str(req["request_id"])
@@ -97,6 +128,14 @@ def website_text(job_id):
     c = store.cache_get((w.get("meta") or {}).get("req_hash") or "")
     rows = first_list(json.loads(c["response_json"])) if c else []
     return (visible_text(rows[0].get("content")) if rows else w.get("text")), w.get("url")
+
+
+def www_variant(url):
+    """https://x.com -> https://www.x.com and back; same host, so the same domain."""
+    p = urllib.parse.urlparse(url)
+    host = p.hostname or ""
+    other = host[4:] if host.startswith("www.") else "www." + host
+    return p._replace(netloc=p.netloc.replace(host, other, 1)).geturl()
 
 
 def is_redirect(url):
@@ -205,10 +244,25 @@ class Job:
 
     # ---------- step 3: website ----------
     def s_website(self, url):
-        resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": [url]})
-        page = first_list(resp)[0] if first_list(resp) else {}
-        text = visible_text(page.get("content"))
-        return {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or url, "meta": meta}
+        """Fetch the site, cheapest way first, and stop at the first one that returns real text:
+        1. the address given; 2. its www. twin (same host: many sites only hold a certificate for one of the two,
+        e.g. delhivery.com fails with ERR_CERT_COMMON_NAME_INVALID while www.delhivery.com loads);
+        3. Crustdata human_mode (a browser-like fetch) on each, for sites that block automated fetches.
+        Never a different domain, so the check stays about the domain that was given. Each retry is 1 credit, only on failure."""
+        tried = []
+        out = None
+        for u, human in [(url, False), (www_variant(url), False), (url, True), (www_variant(url), True)]:
+            body = {"urls": [u], "human_mode": True} if human else {"urls": [u]}
+            resp, meta = crust.call(self.id, "/web/enrich/live", body)
+            page = first_list(resp)[0] if first_list(resp) else {}
+            text = visible_text(page.get("content"))
+            out = {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or u,
+                   "meta": meta, "fetched_with": "human_mode" if human else "standard"}
+            if out["ok"] and len(text) >= 200:
+                return {**out, "tried": tried}
+            tried.append({"url": u + (" (browser-like)" if human else ""),
+                          "error": page.get("message") or page.get("error") or ("almost no text" if out["ok"] else "no response")})
+        return {**out, "tried": tried}
 
     # ---------- step 4: registry identifiers from the web ----------
     # ---------- page verification: never cite a search snippet or a redirect ----------
@@ -344,6 +398,12 @@ class Job:
             if gstin_valid(gstin):
                 self.fact("GSTIN format and checksum", f"{gstin} is well-formed; state code {gstin[:2]} = {GST_STATES.get(gstin[:2], 'unknown')}; PAN {gstin[2:12]}",
                           {"type": "computed", "field": "GSTIN check digit (15th character)", "record_date": None})
+                prof = gstin_profile(gstin)
+                if prof["pan_type"]:
+                    self.fact("PAN holder type", prof["pan_type"], {"type": "computed", "field": "PAN 4th character", "record_date": None})
+                why = entity_type_mismatch(name, prof["pan_type_code"])
+                if why:
+                    self.flag("amber", f"{why}. A registered company or LLP has a PAN of its own; ask for the GST registration certificate", {"type": "computed", "field": "PAN 4th character"})
             else:
                 self.flag("red", f"GSTIN {gstin} fails the format/checksum test, so it is not a real GST number",
                           {"type": "computed", "field": "GSTIN check digit"})
@@ -441,7 +501,8 @@ class Job:
             w = self.step("website", lambda: self.s_website(url))
             wsrc = crust.source_ref(w["meta"], "page title / text", url=w["url"])
             if not w["ok"] or len(w["text"]) < 200:
-                self.flag("amber", f"Website {url} did not load or has almost no content", wsrc)
+                why = "; ".join(f"{t['url']}: {t['error']}" for t in w.get("tried", [])) or "no content"
+                self.flag("amber", f"Website {url} did not load or has almost no content, even with a browser-like fetch ({why})", wsrc)
             else:
                 # rules decide; Jev can add a flag or the sentence to quote, never remove a flag
                 toks = norm_tokens(legal)

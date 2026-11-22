@@ -32,6 +32,13 @@ UI = os.path.join(HERE, "ui.html")
 LANDING = os.path.join(HERE, "landing.html")
 _busy = threading.Lock()
 
+def _latest_trust(vendor_id):
+    """Most recent finished vendor check for this vendor, whatever version of its record it ran on."""
+    r = store.db().execute("SELECT * FROM jobs WHERE (job_id=? OR job_id LIKE ?) AND status='done' ORDER BY updated_at DESC LIMIT 1",
+                           (f"trust:{vendor_id}", f"trust:{vendor_id}:%")).fetchone()
+    return dict(r) if r else None
+
+
 def _inv_row(r):
     d = json.loads(r["decision_json"] or "{}")
     x = json.loads(r["extracted_json"] or "{}")
@@ -60,6 +67,7 @@ class H(BaseHTTPRequestHandler):
         b = open(path, "rb").read()
         self.send_response(200)
         self.send_header("content-type", "text/html; charset=utf-8")
+        self.send_header("cache-control", "no-cache")
         self.send_header("content-length", str(len(b)))
         self.end_headers()
         return self.wfile.write(b)
@@ -123,11 +131,12 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/vendors":
             out = []
             for v in ap.vendors().values():
-                j = store.get_job(ap.trust_job_id(v))
-                out.append({**v, "trust": j["verdict"] if j else None})
+                j = store.get_job(ap.trust_job_id(v)) or _latest_trust(v["vendor_id"])
+                out.append({**v, "trust": j["verdict"] if j else None, "trust_job": j["job_id"] if j else None})
             return self._json(out)
         if p.startswith("/cases/"):
-            j = store.get_job(p[len("/cases/"):])
+            jid = urllib.parse.unquote(p[len("/cases/"):])
+            j = store.get_job(jid) or (_latest_trust(jid.split(":")[1]) if jid.startswith("trust:") and jid.count(":") == 1 else None)
             return self._json({**j, "report": json.loads(j["report_json"] or "null")} if j else {"error": "not found"}, 200 if j else 404)
         self._json({"error": "not found"}, 404)
 

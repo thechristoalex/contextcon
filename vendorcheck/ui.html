@@ -51,6 +51,81 @@ body.noscroll{overflow:hidden}
 .scanph i{position:absolute;outline:2px solid #384ce3;background:rgba(56,76,227,.14);border-radius:2px}
 .scangrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
 @media (max-width:800px){.scangrid{grid-template-columns:1fr}}
+/* four-section layout */
+.tshell{display:flex;flex-direction:column;height:100%}
+.thead{height:52px;flex:none;display:flex;align-items:center;gap:20px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--bg)}
+.thead .brand{padding:0;font-size:14px}
+.ttabs{display:flex;gap:2px;height:100%}
+.ttabs a{position:relative;display:flex;align-items:center;gap:7px;padding:0 12px;color:var(--fg-2);font-weight:500;cursor:pointer;transition:color var(--fast)}
+.ttabs a:hover{color:var(--fg)}
+.ttabs a.on{color:var(--fg)}
+.ttabs a.on:after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--blue);border-radius:2px}
+.ttabs .cnt{font:500 11px var(--mono);color:var(--fg-3);background:var(--bg-sub);border:1px solid var(--line);border-radius:9px;padding:0 6px}
+.ttabs .cnt.hot{color:#fff;background:var(--blue);border-color:var(--blue)}
+.tright{margin-left:auto;display:flex;gap:8px;align-items:center}
+.tright .kbtn{margin:0;width:auto;height:30px}
+.me2{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 4px;border:1px solid var(--line-2);border-radius:15px;background:var(--bg);font:500 12px var(--sans);color:var(--fg-2);cursor:pointer}
+.me2:hover{border-color:var(--fg-3)}
+.top{padding:0 24px}
+.view{width:100%}
+.view>*{max-width:1180px;margin-left:auto;margin-right:auto}
+.view.flush>*{max-width:none}
+.narrow{max-width:760px!important}
+.greet .d{color:var(--fg-3);font-size:13px}
+.greet h2{font:400 34px/1.15 "PP Mondwest",Georgia,serif;margin:4px 0 20px;letter-spacing:-.01em}
+@font-face{font-family:"PP Mondwest";src:local("PP Mondwest"),url("/static/PPMondwest-Regular.otf") format("opentype");font-display:swap}
+.drop{border:1.5px dashed var(--line-2);border-radius:10px;padding:22px;display:flex;align-items:center;gap:18px;background:var(--bg-sub);transition:border-color var(--fast),background var(--fast);margin-bottom:12px}
+.drop:hover,.drop.over{border-color:var(--blue);background:var(--blue-soft)}
+.drop .ico{width:44px;height:44px;border-radius:10px;background:var(--bg);border:1px solid var(--line);display:grid;place-items:center;flex:none}
+.drop b{display:block;font-size:15px}.drop span{color:var(--fg-3);font-size:13px}
+.drop .go{margin-left:auto;display:flex;gap:8px}
+.minor{display:flex;gap:14px;font-size:12px;color:var(--fg-3);margin:0 0 22px}.minor a{cursor:pointer;color:var(--fg-2)}.minor a:hover{color:var(--blue)}
+.kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:26px}
+.kc{border:1px solid var(--line);border-radius:8px;padding:14px;cursor:pointer;transition:border-color var(--fast),transform var(--fast)}
+.kc:hover{border-color:var(--fg-3);transform:translateY(-1px)}
+.kc .v{font:500 24px/1.2 var(--sans);margin-top:6px;font-variant-numeric:tabular-nums}.kc .s{font-size:12px;color:var(--fg-3)}
+.today{border-top:1px solid var(--line)}
+.td{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;transition:background var(--fast)}
+.td:hover{background:var(--bg-hover)}
+.td .tk{width:18px;height:18px;border:1.5px solid var(--line-2);border-radius:50%;flex:none}
+.td .grow{flex:1;min-width:0}.td .grow small{display:block;color:var(--fg-3)}
+.ins{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.ins .bd{padding:14px}
+.hbar{display:grid;grid-template-columns:150px 1fr 100px;gap:10px;align-items:center;font-size:12px;margin:8px 0}
+.hbar .t{height:8px;border-radius:4px;background:var(--line);overflow:hidden}.hbar .t i{display:block;height:100%;background:var(--blue);border-radius:4px}
+.big{font:500 30px/1.1 var(--sans);font-variant-numeric:tabular-nums}
+@media(max-width:900px){.kgrid{grid-template-columns:1fr 1fr}.ins{grid-template-columns:1fr}.ttabs a{padding:0 8px}.thead .brand{display:none}}
+/* efferd-style blocks, rebuilt natively */
+.blk{border:1px solid var(--line);border-radius:10px;background:var(--bg);overflow:hidden}
+.blk>.bh{display:flex;align-items:center;gap:10px;padding:14px 16px 0}
+.blk>.bh h3{margin:0;font-size:14px;font-weight:600}
+.blk>.bh .sub{display:block;color:var(--fg-3);font-size:12px;font-weight:400}
+.blk>.bh .rt{margin-left:auto;display:flex;gap:6px}
+.blk>.bb{padding:12px 16px 16px}
+.seg{display:inline-flex;border:1px solid var(--line-2);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--bg);font:500 12px var(--sans);color:var(--fg-2);padding:4px 10px;cursor:pointer}
+.seg button.on{background:var(--fg);color:#fff}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.strip>div{padding:14px 16px;border-right:1px solid var(--line)}.strip>div:last-child{border-right:0}
+.strip .v{font:500 22px/1.2 var(--sans);margin-top:4px;font-variant-numeric:tabular-nums}
+.delta{display:inline-flex;align-items:center;gap:3px;font:500 11px var(--mono);padding:1px 6px;border-radius:9px;margin-left:6px;vertical-align:middle}
+.delta.up{color:var(--paid);background:var(--paid-soft)}.delta.dn{color:var(--bad);background:var(--bad-soft)}.delta.nt{color:var(--fg-3);background:var(--bg-sub)}
+.g2{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:16px}
+.chart svg{width:100%;height:auto;display:block}
+.chart .tip{font:500 11px var(--mono);color:var(--fg-3)}
+.alert{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.alert:last-child{border-bottom:0}.alert:hover .t{color:var(--blue)}
+.alert .t{font-weight:500}.alert small{display:block;color:var(--fg-3)}
+.donut{display:flex;gap:16px;align-items:center}
+.leg{display:grid;gap:6px;font-size:12px}.leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--bg);border-left:1px solid var(--line-2);box-shadow:var(--shadow-pop);z-index:40;transform:translateX(100%);transition:transform var(--slow) var(--ease);display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.drawer .dh{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.drawer .db{padding:16px 18px;overflow:auto;flex:1}
+.tier{display:inline-flex;align-items:center;gap:5px;font:500 11px var(--mono);padding:2px 8px;border-radius:10px;border:1px solid}
+.tier.low{color:var(--paid);border-color:#bfe3d3;background:var(--paid-soft)}.tier.med{color:var(--held);border-color:#f0d5a8;background:var(--held-soft)}.tier.high{color:var(--bad);border-color:#efc2bc;background:var(--bad-soft)}.tier.na{color:var(--fg-3);border-color:var(--line-2)}
+@media(max-width:900px){.g2,.g3,.strip{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -66,18 +141,17 @@ body.noscroll{overflow:hidden}
   <input id="pcam" class="vh" type="file" accept="image/*" capture="environment">
   <input id="pphoto" class="vh" type="file" accept="image/*">
 </div>
-<div class="shell">
-  <aside class="side">
+<div class="tshell">
+  <header class="thead">
     <div class="brand"><svg width="20" height="18" viewBox="0 0 26 22" fill="none" stroke="#384ce3" stroke-width="2"><path d="M13 2 24 7 13 12 2 7z"/><path d="M2 11.5 13 16.5 24 11.5"/><path d="M2 15.5 13 20.5 24 15.5"/></svg>Payables Desk</div>
-    <button class="kbtn" id="kopen" aria-label="Open command palette"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search or jump to…<span class="kbd" style="margin-left:auto">⌘K</span></button>
-    <nav class="nav" id="nav"></nav>
-    <div class="me"><div class="avatar" id="av">·</div><div class="who" id="who">…</div><button class="btn ghost sm" id="setme" title="Change approver name">Edit</button></div>
-  </aside>
-  <section class="main">
-    <div class="top" id="top"></div>
-    <div class="view" id="view"></div>
-  </section>
+    <nav class="ttabs" id="nav"></nav>
+    <div class="tright"><button class="kbtn" id="kopen" aria-label="Open command palette"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search<span class="kbd">⌘K</span></button>
+      <button class="me2" id="setme" title="Approver and settings"><span class="avatar" id="av">·</span><span id="who">…</span></button></div>
+  </header>
+  <div class="top" id="top"></div>
+  <div class="view" id="view"></div>
 </div>
+<div class="drawer" id="drawer" role="dialog" aria-label="Vendor details"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="pal" id="pal" role="dialog" aria-modal="true" aria-label="Command palette"><div class="bx"><input id="pq" placeholder="Type a command or search documents…" autocomplete="off"><div class="res" id="pres"></div></div></div>
 
@@ -138,25 +212,22 @@ const IC={
  check:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',bank:'<path d="M3 10h18M5 10v8M9 10v8M15 10v8M19 10v8M2 21h20M12 3l9 5H3z"/>',
  led:'<path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/>',log:'<path d="M4 6h16M4 12h16M4 18h10"/>',set:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>'};
 const SCREENS=[
- {g:'Work',id:'dash',t:'Dashboard',ic:'dash',k:'d'},{g:'Work',id:'inbox',t:'Inbox',ic:'inbox',k:'i'},{g:'Work',id:'approvals',t:'Approvals',ic:'appr',k:'a'},
- {g:'Records',id:'vendors',t:'Vendors',ic:'vend',k:'v'},{g:'Records',id:'ledger',t:'Ledger',ic:'led',k:'l'},
- {g:'Tools',id:'vcheck',t:'Vendor check',ic:'check',k:'c'},{g:'Tools',id:'bank',t:'Bank lines',ic:'bank',k:'b'},
- {g:'System',id:'activity',t:'Activity',ic:'log',k:'y'},{g:'System',id:'settings',t:'Settings',ic:'set',k:'s'}];
+ {id:'dash',t:'Dashboard',k:'d',tab:1},{id:'vendors',t:'Vendors',k:'v',tab:1},{id:'inbox',t:'Payments',k:'p',tab:1},{id:'insights',t:'Insights',k:'i',tab:1},
+ {id:'ledger',t:'Ledger',k:'l'},{id:'bank',t:'Bank lines',k:'b'},{id:'vcheck',t:'Check a vendor',k:'c'},{id:'activity',t:'Activity',k:'y'},{id:'settings',t:'Settings',k:'s'}];
+const TABOF={dash:'dash',vendors:'vendors',vcheck:'vendors',inbox:'inbox',case:'inbox',ledger:'inbox',bank:'inbox',approvals:'inbox',insights:'insights',activity:'insights',settings:''};
 let ROUTE={id:'dash'};
-function drawNav(){const waiting=INV.filter(r=>r.state==='awaiting_approval').length,held=INV.filter(r=>r.state==='held').length;
-  const cnt={inbox:INV.length,approvals:waiting+held};let g='';
-  $('#nav').innerHTML=SCREENS.map(s=>{const hd=s.g!==g?`<div class="grp lbl">${s.g}</div>`:'';g=s.g;
-    const c=cnt[s.id]!=null?`<span class="cnt ${s.id==='approvals'&&waiting?'hot':''}">${cnt[s.id]}</span>`:'';
-    return hd+`<a data-r="${s.id}" class="${ROUTE.id===s.id||(ROUTE.id==='case'&&s.id==='inbox')?'on':''}" title="g then ${s.k}"><svg viewBox="0 0 24 24">${IC[s.ic]}</svg>${s.t}${c}</a>`}).join('');
+function drawNav(){const w=INV.filter(r=>r.state==='awaiting_approval').length,h=INV.filter(r=>r.state==='held').length;
+  const cnt={inbox:w+h};const on=TABOF[ROUTE.id];
+  $('#nav').innerHTML=SCREENS.filter(s=>s.tab).map(s=>`<a data-r="${s.id}" class="${on===s.id?'on':''}" title="g then ${s.k}">${s.t}${cnt[s.id]?`<span class="cnt ${w?'hot':''}">${cnt[s.id]}</span>`:''}</a>`).join('');
   $$('#nav a').forEach(a=>a.onclick=()=>go(a.dataset.r))}
-function topbar(title,{crumb,acts=''}={}){TOP.innerHTML=(crumb?`<div class="crumb">${crumb}<span>/</span></div>`:'')+`<h1>${title}</h1><div class="acts">${acts}</div>`}
+function topbar(title,{crumb,acts=''}={}){TOP.style.display=title?'':'none';TOP.innerHTML=(crumb?`<div class="crumb">${crumb}<span>/</span></div>`:'')+`<h1>${title}</h1><div class="acts">${acts}</div>`}
 async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
 const blobUrl=async p=>{const r=await fetch(p);return URL.createObjectURL(await r.blob())};
-async function go(id,arg){closeScanner();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
+async function go(id,arg){closeScanner();$('#drawer')&&$('#drawer').classList.remove('on');ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
-  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
+  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings,insights})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
 
 /* scan a paper bill. The scanner is a full-screen layer, so it cannot open off-screen on a phone.
@@ -199,7 +270,8 @@ async function submitScan(c){
   catch(e){shot.hidden=true;liveMode(false);
     scanMsg((/load failed|failed to fetch|network/i.test(e.message||'')?'Could not reach the app. Check the connection.':e.message||'The scan failed.')+' Tap the white button to try again.','err')}
 }
-async function onPicked(e){const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+async function onPicked(e){const f=e.target.files&&e.target.files[0];e.target.value='';return scanFile(f)}
+async function scanFile(f){if(!f)return;
   if($('#scanner').hidden){$('#scanner').hidden=false;document.body.classList.add('noscroll')}
   stopCam();
   let c;try{c=await fileToCanvas(f)}catch(_){liveMode(false);return scanMsg('That file could not be opened as a picture. Use a JPG, PNG or a new photo.','err')}
@@ -209,31 +281,116 @@ $('#shutter').onclick=()=>{const v=$('#cam');if(!v.videoWidth)return scanMsg('Th
   const c=toCanvas(v,v.videoWidth,v.videoHeight);stopCam();submitScan(c)};
 $('#pcam').onchange=onPicked;$('#pphoto').onchange=onPicked;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#scanner').hidden)closeScanner()});
+window.__scanFile=scanFile;  // the Dashboard drop zone and Upload button hand files here
 function wireScan(){const b=$('#scanbtn');if(b)b.onclick=openScanner}
+
+/* ---------- shared chart helpers (inline SVG, no library) ---------- */
+function areaChart(series,{h=160,labels=[],fmt=v=>v}={}){const W=600,H=h,P=24,n=Math.max(2,series[0].pts.length),mx=Math.max(1,...series.flatMap(s=>s.pts));
+  const X=i=>P+i*(W-2*P)/(n-1),Y=v=>H-P-(v/mx)*(H-2*P);
+  const grid=[0,.5,1].map(f=>`<line x1="${P}" x2="${W-P}" y1="${Y(mx*f)}" y2="${Y(mx*f)}" stroke="var(--line)"/><text x="${P-4}" y="${Y(mx*f)+3}" text-anchor="end" font-size="9" fill="var(--fg-3)">${fmt(mx*f)}</text>`).join('');
+  const paths=series.map((s,k)=>{const d=s.pts.map((v,i)=>`${i?'L':'M'}${X(i).toFixed(1)} ${Y(v).toFixed(1)}`).join(' ');
+    return `<defs><linearGradient id="ag${k}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${s.c}" stop-opacity=".22"/><stop offset="1" stop-color="${s.c}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${d} L${X(n-1)} ${H-P} L${X(0)} ${H-P}Z" fill="url(#ag${k})"/><path d="${d}" fill="none" stroke="${s.c}" stroke-width="1.6"/>${s.pts.map((v,i)=>v?`<circle cx="${X(i)}" cy="${Y(v)}" r="2.5" fill="${s.c}"><title>${labels[i]||''}: ${fmt(v)}</title></circle>`:'').join('')}`}).join('');
+  const lab=labels.map((l,i)=>i%Math.ceil(n/7)===0?`<text x="${X(i)}" y="${H-6}" text-anchor="middle" font-size="9" fill="var(--fg-3)">${l}</text>`:'').join('');
+  return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="chart">${grid}${paths}${lab}</svg></div>`}
+function donut(parts,size=110){const tot=parts.reduce((a,p)=>a+p.v,0)||1;let a0=-Math.PI/2;const r=size/2-8,c=size/2;
+  const arcs=parts.filter(p=>p.v).map(p=>{const a1=a0+p.v/tot*Math.PI*2,lg=a1-a0>Math.PI?1:0;const d=`M${c+r*Math.cos(a0)} ${c+r*Math.sin(a0)} A${r} ${r} 0 ${lg} 1 ${c+r*Math.cos(a1)} ${c+r*Math.sin(a1)}`;a0=a1;return `<path d="${d}" fill="none" stroke="${p.c}" stroke-width="14"><title>${p.l}: ${p.v}</title></path>`}).join('');
+  return `<div class="donut"><svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${arcs}<text x="${c}" y="${c+5}" text-anchor="middle" font-size="16" font-weight="600" fill="var(--fg)">${tot}</text></svg><div class="leg">${parts.map(p=>`<span><i style="background:${p.c}"></i>${p.l} <b class="mono">${p.v}</b></span>`).join('')}</div></div>`}
+const STC={paid:'#1f8a63',awaiting_approval:'#384ce3',held:'#c27a12',duplicate:'#c03a2b',rejected:'#8a90a0'};
+function dayBuckets(items,tsKey,valFn,days){const now=new Date();now.setHours(23,59,59,999);const out=Array(days).fill(0),lab=[];
+  for(let i=days-1;i>=0;i--){const d=new Date(now-i*86400000);lab.push(d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}))}
+  items.forEach(it=>{const t=it[tsKey]*1000;const i=days-1-Math.floor((now-t)/86400000);if(i>=0&&i<days)out[i]+=valFn(it)});return {out,lab}}
+function tierOf(v,inv){if(!v.trust)return ['na','Not checked'];const holds=inv.filter(r=>r.vendor_id===v.vendor_id&&['held','duplicate'].includes(r.state)).length;
+  if(v.trust==='CANNOT_VERIFY')return ['high','High'];if(v.trust==='HOLD'||holds>1)return ['med','Medium'];return holds?['med','Medium']:['low','Low']}
 
 /* ============ screens ============ */
 async function dash(){
-  topbar('Dashboard',{acts:`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn primary" id="proc">Process inbox</button>`});
-  V.innerHTML=`<div class="kpis">${[1,2,3,4].map(()=>'<div class="kpi"><div class="skel" style="width:50%"></div><div class="skel" style="width:30%;height:22px;margin-top:10px"></div></div>').join('')}</div>`;
-  const [pay,ev]=await Promise.all([api('/api/payments'),api('/api/events'),refreshInv()]);
+  topbar('');TOP.style.display='none';
+  V.innerHTML='<div class="narrow" style="padding-top:28px">'+skel(4)+'</div>';
+  const [pay,vend]=await Promise.all([api('/api/payments'),api('/api/vendors'),refreshInv()]);
   const w=INV.filter(r=>r.state==='awaiting_approval'),h=INV.filter(r=>r.state==='held'),d=INV.filter(r=>r.state==='duplicate');
-  const paid=pay.reduce((a,r)=>a+r.amount_inr,0), stopped=[...h,...d].reduce((a,r)=>a+(r.amount_inr||0),0);
-  V.innerHTML=`${scanBox()}<div class="kpis">
-    <div class="kpi"><div class="lbl">Needs approval</div><div class="v" data-count="${w.length}">0</div><div class="s">${inr(w.reduce((a,r)=>a+(r.amount_inr||0),0))} waiting</div></div>
-    <div class="kpi"><div class="lbl">Held with reason</div><div class="v" data-count="${h.length}">0</div><div class="s">for a person to review</div></div>
-    <div class="kpi"><div class="lbl">Paid once</div><div class="v" data-count="${paid}" data-fmt="inr">0</div><div class="s">${pay.length} payment${pay.length===1?'':'s'}</div></div>
-    <div class="kpi"><div class="lbl">Stopped before paying</div><div class="v" data-count="${stopped}" data-fmt="inr">0</div><div class="s">${h.length+d.length} held or duplicate</div></div></div>
-  <div class="cols"><div class="box"><div class="hd"><span class="lbl">Needs you</span><span class="f3" style="margin-left:auto">${w.length+h.length}</span></div><div class="bd">
-    ${[...w,...h].map((r,i)=>`<div class="li rowin" style="animation-delay:${i*20}ms" data-k="${esc(r.invoice_key)}">${st(r.state)}<span class="grow"><span class="mono">${esc(r.invoice_no||nice(r.doc_type))}</span> <span class="f3">· ${esc(r.vendor_id||'')}</span> <span class="f2">${esc((r.reason||'').slice(0,70))}</span></span><span class="mono num">${inr(r.amount_inr)}</span></div>`).join('')||'<div class="empty"><b>Nothing needs you</b>New documents appear here after Process inbox.</div>'}
-  </div></div>
-  <div class="box"><div class="hd"><span class="lbl">Recent activity</span></div><div class="feed">${ev.slice(0,12).map(e=>`<div class="ev"><span class="f3">${ago(e.at)}</span><span class="f2">${esc(e.msg.slice(0,110))}</span></div>`).join('')}</div></div></div>`;
-  countUp(V);$$('.li[data-k]').forEach(el=>el.onclick=()=>go('case',el.dataset.k));wireScan();
-  $('#proc').onclick=e=>busy(e.currentTarget,'Processing…',async()=>{const r=await api('/api/process',{});toast(`Processed ${r.length} document${r.length===1?'':'s'}`);go('dash')});
+  const sum=a=>a.reduce((x,r)=>x+(r.amount_inr||0),0);
+  const wk=Date.now()/1000-7*86400, paidWk=pay.filter(p=>p.paid_at>wk);
+  const hr=new Date().getHours(), part=hr<12?'Morning':hr<17?'Afternoon':'Evening';
+  const nm=(ME&&ME.name)||'there';
+  const todo=[...w.map(r=>({k:r.invoice_key,t:`Approve ${inr(r.amount_inr)} to ${r.vendor_id}`,s:`${r.invoice_no} · all checks passed`,ic:'awaiting_approval'})),
+    ...h.map(r=>({k:r.invoice_key,t:r.doc_type==='bank_change_request'?`Call back ${r.vendor_id} about a bank change`:`Review held ${r.invoice_no||nice(r.doc_type)}`,s:(r.reason||'').slice(0,90),ic:'held'})),
+    ...vend.filter(v=>!v.trust).map(v=>({v:v,t:`Check ${v.legal_name} before its first payment`,s:'Vendor check not run yet',ic:'none'}))];
+  V.innerHTML=`<div class="narrow" style="padding:28px 24px 64px">
+   <div class="greet"><div class="d">${new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'})}</div><h2>${part}, ${esc(nm)}</h2></div>
+   <div class="drop" id="drop"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#384ce3" stroke-width="1.8"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></div>
+     <div><b>Scan a bill</b><span>Drop a photo here, or use the camera. Read on this machine, then every check runs.</span></div>
+     <div class="go"><button class="btn primary" id="scanbtn">Use camera</button><label class="btn" style="cursor:pointer">Upload<input id="pf2" type="file" accept="image/*" hidden></label></div></div>
+   ${scanBox({cameraOnly:true})}
+   <div class="minor"><a id="m1">Paste an invoice or email</a><a id="m2">Post bank lines</a><a id="m3">Process the inbox folder</a></div>
+   <div class="kgrid">
+    <div class="kc" data-go="inbox" data-f="awaiting_approval"><div class="lbl">Needs approval</div><div class="v" data-count="${sum(w)}" data-fmt="inr">0</div><div class="s">${w.length} invoice${w.length===1?'':'s'}</div></div>
+    <div class="kc" data-go="inbox" data-f="held"><div class="lbl">Held</div><div class="v" data-count="${h.length}">0</div><div class="s">waiting for a person</div></div>
+    <div class="kc" data-go="ledger"><div class="lbl">Paid this week</div><div class="v" data-count="${sum(paidWk)}" data-fmt="inr">0</div><div class="s">${paidWk.length} payment${paidWk.length===1?'':'s'}, each once</div></div>
+    <div class="kc" data-go="insights"><div class="lbl">Stopped</div><div class="v" data-count="${sum([...h,...d])}" data-fmt="inr">0</div><div class="s">held or duplicate</div></div></div>
+   <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><span class="lbl" style="color:var(--fg-2)">Today</span><span class="f3">0 of ${todo.length} done</span></div>
+   <div class="today">${todo.map((t,i)=>`<div class="td rowin" style="animation-delay:${i*25}ms" data-i="${i}"><span class="st ${t.ic}">${ICON[t.ic]||ICON.none}</span><div class="grow">${esc(t.t)}<small>${esc(t.s)}</small></div><span class="f3">›</span></div>`).join('')||'<div class="empty"><b>Nothing needs you today</b>Scan a bill to start.</div>'}</div>
+   <div class="g2" style="grid-template-columns:1fr 1fr;margin-top:28px">
+    <div class="blk"><div class="bh"><h3>Recent payments<span class="sub">Each paid once, after approval</span></h3><span class="rt"><button class="btn sm" onclick="go('ledger')">Ledger</button></span></div><div class="bb">${pay.slice(-5).reverse().map(p=>`<div class="alert" onclick="go('ledger')"><span class="st paid">${ICON.paid}</span><div style="flex:1"><span class="t">${esc(p.payee)}</span><small>${esc(p.approved_by)} · ${ago(p.paid_at)}</small></div><span class="mono num">${inr(p.amount_inr)}</span></div>`).join('')||'<div class="f3">No payments yet.</div>'}</div></div>
+    <div class="blk"><div class="bh"><h3>Vendors to watch<span class="sub">Verdict, holds and checks not run</span></h3><span class="rt"><button class="btn sm" onclick="go('vendors')">Vendors</button></span></div><div class="bb">${vend.map(v=>{const [k,l]=tierOf(v,INV);return {v,k,l}}).sort((a,b)=>({high:0,med:1,na:2,low:3}[a.k]-{high:0,med:1,na:2,low:3}[b.k])).slice(0,5).map(({v,k,l})=>`<div class="alert" data-vd="${esc(v.vendor_id)}"><span class="tier ${k}">${l}</span><div style="flex:1"><span class="t">${esc(v.legal_name)}</span><small>${esc(v.domain||'')}</small></div></div>`).join('')}</div></div>
+   </div>
+  </div>`;
+  countUp(V);wireScan();$$('[data-vd]').forEach(e=>e.onclick=()=>vendorDrawer(e.dataset.vd));
+  $$('.kc').forEach(c=>c.onclick=()=>{if(c.dataset.f)FILTER=c.dataset.f;go(c.dataset.go)});
+  $$('.td').forEach(el=>el.onclick=()=>{const t=todo[+el.dataset.i];t.v?go('vcheck',{n:t.v.legal_name,w:t.v.domain||'',d:t.v.director||''}):go('case',t.k)});
+  $('#pf2').onchange=e=>window.__scanFile&&window.__scanFile(e.target.files[0]);
+  const dz=$('#drop');['dragenter','dragover'].forEach(n=>dz.addEventListener(n,e=>{e.preventDefault();dz.classList.add('over')}));
+  ['dragleave','drop'].forEach(n=>dz.addEventListener(n,e=>{e.preventDefault();dz.classList.remove('over')}));
+  dz.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f&&window.__scanFile)window.__scanFile(f)});
+  $('#m1').onclick=()=>{go('inbox').then(()=>$('#drop')?.click())};
+  $('#m2').onclick=()=>go('bank');
+  $('#m3').onclick=e=>busy(e.currentTarget,'Processing…',async()=>{const r=await api('/api/process',{});toast(`Processed ${r.length} document${r.length===1?'':'s'}`);go('dash')});
+}
+
+async function insights(){
+  topbar('Insights',{acts:`<button class="btn" id="act">Full activity log</button>`});
+  V.innerHTML='<div style="padding:20px 24px">'+skel(6)+'</div>';
+  const [pay,vend,ev]=await Promise.all([api('/api/payments'),api('/api/vendors'),api('/api/events'),refreshInv()]);
+  const full=await Promise.all(INV.map(r=>api('/api/invoices/'+encodeURIComponent(r.invoice_key)).catch(()=>null)));
+  const reasons={'Duplicate invoice':0,'Look-alike sender':0,'Bank account mismatch':0,'Bank-detail change':0,'Vendor not verifiable':0,'PO already billed':0};
+  const byCheck={};let credits=0,cleared=0,escal=0,cannot=0;const seenV=new Set();
+  full.forEach(c=>{if(!c)return;const d=c.decision,s=c.invoice.state,amt=c.extracted.amount_inr||0;
+    (d.checks||[]).forEach(k=>{byCheck[k.check]=byCheck[k.check]||{pass:0,fail:0,warn:0,unavailable:0};byCheck[k.check][k.result]=(byCheck[k.check][k.result]||0)+1;
+      if(['held','duplicate'].includes(s)&&k.result==='fail'){const r=k.check==='duplicate'?'Duplicate invoice':k.check==='sender_domain'?'Look-alike sender':k.check==='bank_details'?'Bank account mismatch':k.check==='bank_change'?'Bank-detail change':k.check==='vendor_trust'?'Vendor not verifiable':k.check==='three_way_match'?'PO already billed':null;if(r)reasons[r]+=amt}});
+    const t=d.trust_report;if(t&&!seenV.has(c.invoice.vendor_id)){seenV.add(c.invoice.vendor_id);credits+=t.cost.credits;cleared+=t.screening.hits_cleared;escal+=t.screening.hits_escalated;cannot+=t.cannot_verify.length}});
+  // each held or duplicate invoice counts once in the total, even if several checks stopped it
+  const prot=INV.filter(r=>['held','duplicate'].includes(r.state)).reduce((a,r)=>a+(r.amount_inr||0),0), mx=Math.max(1,...Object.values(reasons));
+  const nV=seenV.size, nI=INV.filter(r=>r.doc_type==='invoice').length, rev=nV*1500+nI*60, cost=credits*25;
+  V.innerHTML=`<div style="padding:20px 24px 64px"><div class="kgrid">
+    <div class="kc"><div class="lbl">Money protected</div><div class="v" data-count="${prot}" data-fmt="inr">0</div><div class="s">held or stopped before paying</div></div>
+    <div class="kc"><div class="lbl">Paid once</div><div class="v" data-count="${pay.reduce((a,p)=>a+p.amount_inr,0)}" data-fmt="inr">0</div><div class="s">${pay.length} payment${pay.length===1?'':'s'} · 0 twice</div></div>
+    <div class="kc"><div class="lbl">Namesakes cleared</div><div class="v" data-count="${cleared}">0</div><div class="s">${escal} escalated for a person</div></div>
+    <div class="kc"><div class="lbl">Data cost</div><div class="v">₹${Math.round(cost).toLocaleString('en-IN')}</div><div class="s">${credits.toFixed(1)} Crustdata credits</div></div></div>
+   <div class="g2"><div class="blk"><div class="bh"><h3>Money through the desk<span class="sub">₹ by document date, paid vs held vs duplicate</span></h3><span class="rt"><span class="seg" id="rng"><button data-d="7" class="on">7 days</button><button data-d="30">30 days</button></span></span></div><div class="bb" id="flow"></div></div>
+    <div class="blk"><div class="bh"><h3>Outcomes<span class="sub">Every document, by result</span></h3></div><div class="bb">${donut(Object.entries({paid:'Paid',awaiting_approval:'Needs approval',held:'Held',duplicate:'Duplicate',rejected:'Not payable'}).map(([k,l])=>({l,c:STC[k],v:INV.filter(r=>r.state===k).length})))}</div></div></div>
+   <div class="ins">
+    <div class="box"><div class="hd"><span class="lbl">Where money was stopped</span></div><div class="bd">${Object.entries(reasons).map(([k,v])=>`<div class="hbar"><span>${k}</span><span class="t"><i style="width:${v/mx*100}%"></i></span><span class="mono r">${inr(v)}</span></div>`).join('')}</div></div>
+    <div class="box"><div class="hd"><span class="lbl">Price against cost</span></div><div class="bd">
+      <div class="hbar"><span>Vendors verified</span><span class="mono">${nV} × ₹1,500</span><span class="mono r">${inr(nV*1500)}</span></div>
+      <div class="hbar"><span>Invoices processed</span><span class="mono">${nI} × ₹60</span><span class="mono r">${inr(nI*60)}</span></div>
+      <div class="hbar"><span>Data cost</span><span class="mono">${credits.toFixed(1)} cr × ₹25</span><span class="mono r">−${inr(cost)}</span></div>
+      <div class="hbar" style="border-top:1px solid var(--line);padding-top:8px"><b>Gross margin</b><span></span><span class="mono r"><b>${rev?Math.round((rev-cost)/rev*100):0}%</b></span></div>
+      <p class="f3" style="margin:8px 0 0">Prices are our proposal. Model cost is ₹0: no model makes a decision.</p></div></div>
+    <div class="box"><div class="hd"><span class="lbl">Checks by result</span></div><div class="bd"><table class="tbl"><thead><tr><th>Check</th><th class="r">Pass</th><th class="r">Fail</th><th class="r">Warn</th></tr></thead><tbody>${Object.entries(byCheck).map(([k,v])=>`<tr><td>${esc(chkName(k))}</td><td class="r mono" style="color:var(--paid)">${v.pass||0}</td><td class="r mono" style="color:var(--bad)">${(v.fail||0)+(v.unavailable||0)}</td><td class="r mono" style="color:var(--held)">${v.warn||0}</td></tr>`).join('')}</tbody></table>
+      <p class="f3" style="margin:10px 0 0">${cannot} question${cannot===1?'':'s'} answered "cannot verify" instead of guessed.</p></div></div>
+    <div class="box"><div class="hd"><span class="lbl">Recent activity</span></div><div class="feed">${ev.slice(0,10).map(e=>`<div class="ev"><span class="f3">${ago(e.at)}</span><span class="f2">${esc(e.msg.slice(0,100))}</span></div>`).join('')}</div></div>
+   </div></div>`;
+  const drawFlow=days=>{const sm=st=>dayBuckets(INV.filter(r=>st.includes(r.state)),'updated_at',r=>r.amount_inr||0,days);
+    const a=sm(['paid','awaiting_approval']),b=sm(['held']),c=sm(['duplicate']);
+    $('#flow').innerHTML=areaChart([{c:'#1f8a63',pts:a.out},{c:'#c27a12',pts:b.out},{c:'#c03a2b',pts:c.out}],{labels:a.lab,fmt:v=>v>=1e5?'₹'+(v/1e5).toFixed(1)+'L':'₹'+Math.round(v/1000)+'k'})+
+      `<div class="leg" style="grid-auto-flow:column;justify-content:start;gap:16px;margin-top:6px"><span><i style="background:#1f8a63"></i>Paid or ready</span><span><i style="background:#c27a12"></i>Held</span><span><i style="background:#c03a2b"></i>Duplicate</span></div>`};
+  drawFlow(7);$$('#rng button').forEach(b=>b.onclick=()=>{$$('#rng button').forEach(x=>x.classList.toggle('on',x===b));drawFlow(+b.dataset.d)});
+  countUp(V);$('#act').onclick=()=>go('activity');
 }
 
 let FILTER='all', Q='', SEL=0;
 async function inbox(){
-  topbar('Inbox',{acts:`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn" id="drop">Add document</button><button class="btn primary" id="proc">Process inbox</button>`});
+  topbar('Payments',{acts:`<button class="btn" id="toled">Ledger</button><button class="btn" id="tobank">Bank lines</button>`+`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn" id="drop">Add document</button><button class="btn primary" id="proc">Process inbox</button>`});
   V.innerHTML=skel();await refreshInv();
   const F={all:['All',()=>true],awaiting_approval:['Needs approval',r=>r.state==='awaiting_approval'],held:['Held',r=>r.state==='held'],paid:['Paid',r=>r.state==='paid'],duplicate:['Duplicate',r=>r.state==='duplicate']};
   const draw=()=>{const rows=INV.filter(F[FILTER][1]).filter(r=>!Q||JSON.stringify(r).toLowerCase().includes(Q));SEL=Math.min(SEL,Math.max(0,rows.length-1));
@@ -241,12 +398,18 @@ async function inbox(){
     $$('#tb tr[data-k]').forEach((tr,i)=>{tr.onclick=()=>go('case',tr.dataset.k);tr.onmouseenter=()=>{SEL=i;$$('#tb tr').forEach((x,j)=>x.classList.toggle('sel',j===i))}})};
   V.innerHTML=`${scanBox()}
    <div id="dz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Add an invoice or email</span></div><div style="padding:14px;display:grid;gap:8px"><input id="fname" placeholder="file name, e.g. 08_new_invoice.txt"><textarea id="txt" placeholder="Paste the invoice or email text"></textarea><div><button class="btn primary" id="send">Process document</button></div></div></div>
+   ${(()=>{const g=k=>INV.filter(r=>r.state===k),sm=a=>a.reduce((x,r)=>x+(r.amount_inr||0),0);return `<div class="strip">
+     <div><div class="lbl">Needs approval</div><div class="v">${inr(sm(g('awaiting_approval')))}</div><div class="f3">${g('awaiting_approval').length} invoice(s)</div></div>
+     <div><div class="lbl">Held</div><div class="v">${inr(sm(g('held')))}</div><div class="f3">${g('held').length} document(s)</div></div>
+     <div><div class="lbl">Paid</div><div class="v">${inr(sm(g('paid')))}</div><div class="f3">${g('paid').length} invoice(s), each once</div></div>
+     <div><div class="lbl">Duplicates stopped</div><div class="v">${inr(sm(g('duplicate')))}</div><div class="f3">${g('duplicate').length} caught</div></div></div>`})()}
    <div class="chips">${Object.entries(F).map(([k,[l,f]])=>`<button class="chip ${FILTER===k?'on':''}" data-f="${k}">${l}<b>${INV.filter(f).length}</b></button>`).join('')}<input class="search" id="q" placeholder="Filter…" value="${esc(Q)}"></div>
    <div class="tblwrap"><table class="tbl"><thead><tr><th>Status</th><th>Invoice</th><th>Vendor</th><th class="r">Amount</th><th class="r">Risk</th><th>Reason</th><th class="r">Updated</th></tr></thead><tbody id="tb"></tbody></table></div>
    <div class="f3" style="margin-top:10px"><span class="kbd">j</span> <span class="kbd">k</span> move · <span class="kbd">Enter</span> open · <span class="kbd">/</span> filter · <span class="kbd">⌘K</span> jump</div>`;
   draw();
   $$('[data-f]').forEach(b=>b.onclick=()=>{FILTER=b.dataset.f;SEL=0;$$('[data-f]').forEach(x=>x.classList.toggle('on',x===b));draw()});
   $('#q').oninput=e=>{Q=e.target.value.toLowerCase();SEL=0;draw()};
+  $('#toled').onclick=()=>go('ledger');$('#tobank').onclick=()=>go('bank');
   wireScan();
   $('#drop').onclick=()=>{const z=$('#dz');z.style.display=z.style.display==='none'?'block':'none';$('#txt').focus()};
   $('#send').onclick=e=>busy(e.currentTarget,'Checking…',async()=>{const r=await api('/api/upload',{name:$('#fname').value||('upload_'+Date.now()+'.txt'),text:$('#txt').value});toast(`${esc(r.invoice_key||'Document')}: ${esc(LBL[r.state]||r.state||r.outcome)}`);go('case',r.invoice_key)});
@@ -301,7 +464,7 @@ function billCard(x,v){
    ${b.checks&&b.checks.length?`<div class="bc-sec">Checks on the bill itself</div><ul class="bc-checks">${b.checks.map(c=>`<li><span class="${c.ok?'ok':'no'}">${c.ok?'✓':'✗'}</span><span><b>${esc(nice(c.name))}</b> · ${esc(c.detail)}</span></li>`).join('')}</ul>`:''}
    <div class="f3" style="margin-top:12px">Read on this machine in ${x.scan.read_ms} ms · ₹0 · ${b.jev?'Jev: '+esc(b.jev)+' · ':''}<a href="#" onclick="event.preventDefault();document.getElementById('ph').scrollIntoView({behavior:'smooth'})">see the photo and where each field came from</a></div></div>`}
 async function caseView(key){
-  topbar(`<span class="mono">${esc(key)}</span>`,{crumb:'<a id="bk">Inbox</a>'});$('#bk').onclick=()=>go('inbox');
+  topbar(`<span class="mono">${esc(key)}</span>`,{crumb:'<a id="bk">Payments</a>'});$('#bk').onclick=()=>go('inbox');
   V.innerHTML='<div style="padding:24px">'+skel(4)+'</div>';
   const c=await api('/api/invoices/'+encodeURIComponent(key)), d=c.decision, x=c.extracted, t=d.trust_report, s=c.invoice.state, v=c.vendor||{};
   const can=s==='awaiting_approval', canRe=s==='held';
@@ -368,18 +531,57 @@ async function approvals(){
 }
 
 async function vendors(){
-  topbar('Vendors');V.innerHTML=skel(4);const v=await api('/api/vendors');
-  const vs=x=>x==='CLEAR'?'pass':x==='HOLD'?'warn':x?'fail':'none';
-  V.innerHTML=`<p class="f2" style="margin:0 0 16px">The vendor master. Only the bank account verified at onboarding is ever paid.</p>
-  <div class="tblwrap"><table class="tbl"><thead><tr><th>Vendor</th><th>Domain</th><th>GSTIN</th><th>Verified account</th><th>Check</th><th></th></tr></thead><tbody>
-  ${v.map((x,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td><span class="mono f3">${esc(x.vendor_id)}</span>&nbsp; ${esc(x.legal_name)}</td><td class="mono">${esc(x.domain||'—')}</td><td class="mono">${esc(x.gstin||'—')}</td><td class="mono" title="IFSC ${esc(x.bank?.ifsc)} · verified ${esc(x.bank?.verified_on)}">${esc(x.bank?.account_no)} <span class="f3">· ${esc(x.bank?.verified_on)}</span></td>
-   <td><span class="st">${ICON[vs(x.trust)]}<span class="t ${x.trust?'':'f3'}">${x.trust?esc(nice(x.trust).toLowerCase().replace(/^./,c=>c.toUpperCase())):'Not run'}</span></span></td>
-   <td class="r"><button class="btn sm" data-v="${esc(x.legal_name)}" data-w="${esc(x.domain||'')}" data-d="${esc(x.director||'')}">Check now</button></td></tr>`).join('')}</tbody></table></div>`;
-  $$('[data-v]').forEach(b=>b.onclick=()=>go('vcheck',{n:b.dataset.v,w:b.dataset.w,d:b.dataset.d}));
+  topbar('Vendors',{acts:`<button class="btn primary" id="newv">Check a new vendor</button>`});V.innerHTML='<div style="padding:20px 24px">'+skel(4)+'</div>';
+  const [v,pay]=await Promise.all([api('/api/vendors'),api('/api/payments'),refreshInv()]);
+  const rows=v.map(x=>{const inv=INV.filter(r=>r.vendor_id===x.vendor_id),paid=pay.filter(p=>p.vendor_id===x.vendor_id).reduce((a,p)=>a+p.amount_inr,0);const [k,l]=tierOf(x,INV);
+    return {x,inv,paid,k,l,bc:inv.filter(r=>r.doc_type==='bank_change_request').length}});
+  const cnt=k=>rows.filter(r=>r.k===k).length;
+  V.innerHTML=`<div style="padding:20px 24px 64px"><div class="strip">
+    <div><div class="lbl">Vendors</div><div class="v">${v.length}</div><div class="f3">in the vendor master</div></div>
+    <div><div class="lbl">Low risk</div><div class="v" style="color:var(--paid)">${cnt('low')}</div><div class="f3">verified, no holds</div></div>
+    <div><div class="lbl">Needs attention</div><div class="v" style="color:var(--held)">${cnt('med')+cnt('high')}</div><div class="f3">held invoices or unverifiable</div></div>
+    <div><div class="lbl">Not checked yet</div><div class="v">${cnt('na')}</div><div class="f3">check before first payment</div></div></div>
+  <div class="tblwrap"><table class="tbl"><thead><tr><th>Vendor</th><th>Risk</th><th>Vendor check</th><th class="r">Invoices</th><th class="r">Paid</th><th>Verified account</th><th>Bank changes</th><th></th></tr></thead><tbody>
+  ${rows.map((r,i)=>`<tr class="click rowin" style="animation-delay:${i*20}ms" data-vd="${esc(r.x.vendor_id)}"><td><span class="mono f3">${esc(r.x.vendor_id)}</span>&nbsp; ${esc(r.x.legal_name)}<div class="f3 mono" style="font-size:11px">${esc(r.x.domain||'')}</div></td>
+   <td><span class="tier ${r.k}">${r.l}</span></td><td>${r.x.trust?esc(nice(r.x.trust).toLowerCase()):'<span class="f3">not run</span>'}</td>
+   <td class="r mono">${r.inv.length}</td><td class="r mono num">${inr(r.paid)}</td><td class="mono" title="IFSC ${esc(r.x.bank?.ifsc)}">${esc(r.x.bank?.account_no)} <span class="f3">· ${esc(r.x.bank?.verified_on)}</span></td>
+   <td>${r.bc?`<span class="tier med">${r.bc} held</span>`:'<span class="f3">none</span>'}</td>
+   <td class="r"><button class="btn sm" data-v="${esc(r.x.legal_name)}" data-w="${esc(r.x.domain||'')}" data-d="${esc(r.x.director||'')}">Check now</button></td></tr>`).join('')}</tbody></table></div>
+  <p class="f3" style="margin-top:10px">Click a vendor for its verification, bank-detail history, invoices and payments.</p></div>`;
+  $$('[data-v]').forEach(b=>b.onclick=e=>{e.stopPropagation();go('vcheck',{n:b.dataset.v,w:b.dataset.w,d:b.dataset.d})});
+  $$('tr[data-vd]').forEach(t=>t.onclick=()=>vendorDrawer(t.dataset.vd));
+  $('#newv').onclick=()=>go('vcheck');
 }
-
+async function vendorDrawer(id){const D=$('#drawer');D.innerHTML='<div class="db">'+skel(5)+'</div>';D.classList.add('on');
+  const [v,pay]=await Promise.all([api('/api/vendors'),api('/api/payments')]);const x=v.find(z=>z.vendor_id===id);if(!x){D.classList.remove('on');return}
+  let rep=null;try{const j=await api('/cases/'+encodeURIComponent('trust:'+id));rep=j.report}catch(_){}
+  const inv=INV.filter(r=>r.vendor_id===id),pd=pay.filter(p=>p.vendor_id===id),[k,l]=tierOf(x,INV);
+  D.innerHTML=`<div class="dh"><div><div class="lbl">${esc(x.vendor_id)}</div><b style="font-size:15px">${esc(x.legal_name)}</b></div><span class="tier ${k}" style="margin-left:8px">${l} risk</span><button class="btn ghost sm" style="margin-left:auto" id="dx">Close</button></div>
+   <div class="db">
+    <div class="prop"><span class="k">Domain</span><span class="v mono">${esc(x.domain||'—')}</span></div>
+    <div class="prop"><span class="k">GSTIN</span><span class="v mono">${esc(x.gstin||'—')}</span></div>
+    <div class="prop"><span class="k">Director</span><span class="v">${esc(x.director||'—')}</span></div>
+    <div class="prop"><span class="k">Verified a/c</span><span class="v mono">${esc(x.bank?.account_no)} · ${esc(x.bank?.ifsc)}</span></div>
+    <div class="prop"><span class="k">Verified on</span><span class="v">${esc(x.bank?.verified_on||'—')}</span></div>
+    <div class="prop"><span class="k">Contact</span><span class="v">${esc(x.contact?.email||'—')}</span></div>
+    <div class="sec"><span class="lbl">Vendor check</span>${rep?`<span class="f3">${rep.cost.credits} credits · ₹${rep.cost.inr} · ${rep.screening.hits_cleared} namesakes cleared</span>`:''}</div>
+    ${rep?`<p style="margin:0 0 8px">${esc(rep.summary)}</p>${rep.facts.slice(0,8).map(f=>`<div class="e f2" style="font-size:12px;margin:4px 0"><b>${esc(f.claim)}:</b> ${esc(String(f.value).slice(0,120))}</div>`).join('')}${rep.cannot_verify.map(m=>`<div class="f3" style="font-size:12px">○ Cannot verify: ${esc(m)}</div>`).join('')}`:'<p class="f3">Not checked yet.</p>'}
+    <div style="margin:10px 0 0"><button class="btn sm primary" id="dchk">Run vendor check</button></div>
+    <div class="sec"><span class="lbl">Bank-detail history</span></div>
+    <div class="alert"><span class="st paid">${ICON.paid}</span><div><span class="t">Account verified at onboarding</span><small>${esc(x.bank?.account_no)} · ${esc(x.bank?.verified_on)}</small></div></div>
+    ${inv.filter(r=>r.doc_type==='bank_change_request'||/account/i.test(r.reason||'')).map(r=>`<div class="alert" data-k="${esc(r.invoice_key)}"><span class="st held">${ICON.held}</span><div><span class="t">${r.doc_type==='bank_change_request'?'Change request held':'Invoice asked for a different account'}</span><small>${esc((r.reason||'').slice(0,110))} · ${ago(r.updated_at)}</small></div></div>`).join('')}
+    <div class="sec"><span class="lbl">Documents</span><span class="f3">${inv.length}</span></div>
+    ${inv.map(r=>`<div class="alert" data-k="${esc(r.invoice_key)}">${st(r.state)}<div style="flex:1"><span class="t mono" style="font-size:12px">${esc(r.invoice_no||nice(r.doc_type))}</span></div><span class="mono num">${inr(r.amount_inr)}</span></div>`).join('')||'<p class="f3">None yet.</p>'}
+    <div class="sec"><span class="lbl">Payments</span><span class="f3">${inr(pd.reduce((a,p)=>a+p.amount_inr,0))}</span></div>
+    ${pd.map(p=>`<div class="alert"><span class="st paid">${ICON.paid}</span><div style="flex:1"><span class="t mono" style="font-size:12px">${esc(p.ref)}</span><small>${esc(p.approved_by)} · ${ago(p.paid_at)}</small></div><span class="mono num">${inr(p.amount_inr)}</span></div>`).join('')||'<p class="f3">None yet.</p>'}
+   </div>`;
+  $('#dx').onclick=()=>D.classList.remove('on');
+  $('#dchk').onclick=()=>{D.classList.remove('on');go('vcheck',{n:x.legal_name,w:x.domain||'',d:x.director||''})};
+  D.querySelectorAll('[data-k]').forEach(e=>e.onclick=()=>{D.classList.remove('on');go('case',e.dataset.k)});
+}
+window.vendorDrawer=vendorDrawer;
 async function vcheck(pre){
-  topbar('Vendor check');
+  topbar('Check a vendor',{crumb:'<a onclick="go(\'vendors\')">Vendors</a>'});
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Is this a real, trading business, who runs it, how long has it existed, and is anything off. Live sources, every fact cited.</p>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px"><input id="vn" placeholder="Vendor name" value="${esc(pre?.n||'')}" style="width:240px"><input id="vw" placeholder="Website" value="${esc(pre?.w||'')}" style="width:200px"><input id="vd" placeholder="Director (optional)" value="${esc(pre?.d||'')}" style="width:200px"><button class="btn primary" id="go">Run check</button></div><div id="out"></div>`;
   $('#go').onclick=e=>busy(e.currentTarget,'Checking live sources…',async()=>{$('#out').innerHTML=skel(5);
@@ -395,7 +597,7 @@ async function vcheck(pre){
 
 const SAMPLE='date,description,amount\n3 Oct 2026,RAZ*SWIGGY BLR,1240\n7 Oct 2026,AWS EMEA,18500\n7 Oct 2026,AWS EMEA,18500\n9 Oct 2026,PAYTM*SHARMA TRD,4000';
 async function bank(){
-  topbar('Bank lines');
+  topbar('Bank lines',{crumb:'<a onclick="go(\'inbox\')">Payments</a>'});
   const res=r=>({POSTED:'paid',HELD:'held',CANNOT_VERIFY:'rejected'}[r]||'none');
   const lab=r=>({POSTED:'Posted',HELD:'Held',CANNOT_VERIFY:'Cannot verify'}[r]||r);
   const table=rows=>`<div class="tblwrap"><table class="tbl"><thead><tr><th>Result</th><th>Date</th><th>Bank line</th><th class="r">Amount</th><th>Payee</th><th>Account</th><th>Why</th></tr></thead><tbody>${rows.map((l,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td><span class="st ${res(l.result)}">${ICON[res(l.result)]||ICON.none}<span class="t">${esc(lab(l.result))}</span></span></td><td>${esc(l.date)}</td><td class="mono">${esc(l.description)}</td><td class="r mono num">${inr(l.amount_inr)}</td><td>${esc(l.payee||'—')}</td><td>${esc(l.account||'—')}</td><td class="f2" title="${esc(l.reason)}">${esc(l.reason)}</td></tr>`).join('')||'<tr><td colspan="7"><div class="empty"><b>No lines posted yet</b>Paste a statement above.</div></td></tr>'}</tbody></table></div>`;
@@ -409,7 +611,7 @@ async function bank(){
 }
 
 async function ledger(){
-  topbar('Ledger');V.innerHTML=skel();const p=await api('/api/payments');
+  topbar('Ledger',{crumb:'<a onclick="go(\'inbox\')">Payments</a>'});V.innerHTML=skel();const p=await api('/api/payments');
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Simulated payment rails. One row per invoice: the idempotency key is the primary key, so a retry, restart or second approval cannot add a row.</p>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>Paid</th><th>Payee</th><th>Account</th><th class="r">Amount</th><th>Approved by</th><th>Reference</th><th>Idempotency key</th></tr></thead><tbody>
   ${p.map((r,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td class="f2" title="${tsf(r.paid_at)}">${ago(r.paid_at)}</td><td>${esc(r.payee)}</td><td class="mono" title="IFSC ${esc(r.ifsc)}">${esc(r.account)}</td><td class="r mono num">${inr(r.amount_inr)}</td><td class="mono">${esc(r.approved_by)}</td><td class="mono"><span class="copy" data-copy="${esc(r.ref)}">${esc(r.ref)}</span></td><td class="mono f3"><span class="copy" data-copy="${esc(r.idempotency_key)}">${esc(r.idempotency_key)}</span></td></tr>`).join('')||'<tr><td colspan="7"><div class="empty"><b>No payments yet</b>Approve a ready invoice to pay it.</div></td></tr>'}</tbody>
@@ -418,7 +620,7 @@ async function ledger(){
 }
 
 async function activity(){
-  topbar('Activity');V.innerHTML=skel(10);const e=await api('/api/events');
+  topbar('Activity',{crumb:'<a onclick="go(\'insights\')">Insights</a>'});V.innerHTML=skel(10);const e=await api('/api/events');
   V.innerHTML=`<div class="chips"><input class="search" id="aq" placeholder="Filter events…" style="margin-left:0"></div>
   <div class="tblwrap"><table class="tbl"><thead><tr><th>Time</th><th>Job</th><th>Event</th></tr></thead><tbody id="at"></tbody></table></div>`;
   const draw=q=>{$('#at').innerHTML=e.filter(r=>!q||(r.msg+(r.job_id||'')).toLowerCase().includes(q)).map(r=>`<tr><td class="mono f3">${tsf(r.at)}</td><td class="mono">${esc(r.job_id||'—')}</td><td style="${r.level==='error'?'color:var(--bad)':r.level==='warn'?'color:var(--held)':''}" title="${esc(r.msg)}">${esc(r.msg)}</td></tr>`).join('')};
@@ -459,6 +661,7 @@ document.addEventListener('keydown',e=>{
   if(typing){if(e.key==='Escape')document.activeElement.blur();return}
   if(gKey){gKey=false;const sc=SCREENS.find(x=>x.k===e.key);if(sc){go(sc.id);e.preventDefault()}return}
   if(e.key==='g'){gKey=true;setTimeout(()=>gKey=false,900);return}
+  if(e.key==='Escape'&&$('#drawer').classList.contains('on')){$('#drawer').classList.remove('on');return}
   if(e.key==='Escape'&&ROUTE.id==='case'){go('inbox');return}
   if(ROUTE.id==='inbox'){const rows=$$('#tb tr[data-k]');
     const mv=n=>{SEL=Math.max(0,Math.min(rows.length-1,SEL+n));rows.forEach((r,i)=>r.classList.toggle('sel',i===SEL));rows[SEL]?.scrollIntoView({block:'nearest'});e.preventDefault()};
