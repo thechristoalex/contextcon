@@ -7,13 +7,20 @@
 import AppKit
 import CoreImage
 
-struct Look { let tilt: CGFloat; let ev: Double; let blur: Double; let shadow: Bool; let noise: Bool; let q: Double }
+struct Look {
+    let tilt: CGFloat; let ev: Double; let blur: Double; let shadow: Bool; let noise: Bool; let q: Double
+    var keystone: CGFloat = 0   // > 0: shot from below at an angle, the top of the page narrower than the bottom
+}
 let looks: [(String, String, Look)] = [
     ("01_shadowfax_invoice", "01_shadowfax_invoice", Look(tilt: 2, ev: 0, blur: 0, shadow: true, noise: false, q: 0.8)),
     ("02_shreeji_invoice", "02_shreeji_invoice", Look(tilt: -1, ev: -1.0, blur: 0, shadow: false, noise: true, q: 0.7)),
     ("03_tci_invoice", "03_tci_invoice", Look(tilt: -3, ev: -0.3, blur: 1.0, shadow: false, noise: false, q: 0.8)),
     ("04_shadowfax_invoice_resent", "04_shadowfax_invoice_resent", Look(tilt: 1, ev: 0, blur: 0, shadow: true, noise: true, q: 0.6)),
     ("06_tci_invoice_new_account", "06_tci_invoice_new_account", Look(tilt: 1.5, ev: -0.5, blur: 0.5, shadow: false, noise: false, q: 0.4)),
+    // harder, like a hand-held iPhone shot
+    ("01_shadowfax_invoice", "10_hand_tilt7", Look(tilt: 7, ev: 0, blur: 0.4, shadow: true, noise: false, q: 0.7)),
+    ("02_shreeji_invoice", "11_hand_keystone", Look(tilt: 2, ev: -0.4, blur: 0.4, shadow: false, noise: true, q: 0.7, keystone: 0.12)),
+    ("06_tci_invoice_new_account", "12_hand_dark_tilt", Look(tilt: -5, ev: -1.4, blur: 0.6, shadow: true, noise: true, q: 0.6)),
     ("01_shadowfax_invoice", "99_unreadable", Look(tilt: 4, ev: -3.2, blur: 9, shadow: true, noise: true, q: 0.3)),
 ]
 
@@ -120,6 +127,12 @@ func photo(_ p: CGImage, _ look: Look) -> CIImage {
         let n = CIFilter(name: "CIRandomGenerator")!.outputImage!.cropped(to: ext).applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": z, "inputGVector": z, "inputBVector": z, "inputAVector": CIVector(x: 0.12, y: 0, z: 0, w: 0)])
         ci = n.composited(over: ci)
+    }
+    if look.keystone > 0 {
+        let k = ext.width * look.keystone
+        ci = ci.applyingFilter("CIPerspectiveTransform", parameters: [
+            "inputTopLeft": CIVector(x: k, y: ext.height), "inputTopRight": CIVector(x: ext.width - k, y: ext.height),
+            "inputBottomLeft": CIVector(x: 0, y: 0), "inputBottomRight": CIVector(x: ext.width, y: 0)])
     }
     return ci.transformed(by: CGAffineTransform(scaleX: 0.8, y: 0.8))
 }

@@ -466,7 +466,7 @@ def _finish(path, chash, key, vendor_id, x, state, checks, draft=None, duplicate
     store.log(f"inv:{os.path.basename(path)}", f"{state.upper()}: {reason[:160]}")
     if state == "awaiting_approval" and x.get("amount_inr") and x["amount_inr"] <= CONFIG.get("auto_approve_below_inr", 0):
         approve(key, "policy:auto-approve-limit")
-    return {"source_file": path, "invoice_key": key, "state": state, "reason": reason, "risk_score": score["risk_score"]}
+    return {"source_file": path, "invoice_key": key or f"unknown:{chash}", "state": state, "reason": reason, "risk_score": score["risk_score"]}
 
 
 def approve(key, who):

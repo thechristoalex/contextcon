@@ -8,7 +8,45 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css?v=3">
 <style>
-#cam{width:100%;max-width:640px;display:block;background:#000;border-radius:6px}
+/* full-screen bill scanner: fixed, so it can never open off-screen; sized for phones first */
+.scn{position:fixed;inset:0;z-index:1000;background:#05070d;color:#fff;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.scn[hidden]{display:none}
+.scn-top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-weight:600;font-size:17px}
+.scn-x{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:999px;width:40px;height:40px;font-size:20px;line-height:40px}
+.scn-view{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.scn-view video,.scn-view img{width:100%;height:100%;object-fit:contain;background:#000}
+.scn-view video[hidden],.scn-view img[hidden],.scn-frame[hidden]{display:none}
+.scn-frame{position:absolute;inset:6% 8%;border:2px solid rgba(255,255,255,.75);border-radius:12px;pointer-events:none;box-shadow:0 0 0 2000px rgba(0,0,0,.25)}
+.scn-msg{position:absolute;left:16px;right:16px;bottom:16px;padding:12px 14px;border-radius:12px;background:rgba(0,0,0,.72);font-size:15px;line-height:1.35;text-align:center}
+.scn-msg[hidden]{display:none}.scn-msg.err{background:#b42318}
+.scn-msg.busy::before{content:"";display:inline-block;width:14px;height:14px;margin-right:8px;vertical-align:-2px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;animation:scnspin .8s linear infinite}
+@keyframes scnspin{to{transform:rotate(360deg)}}
+.scn-bar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:18px 16px 22px;gap:12px}
+.scn-side{justify-self:center;color:#fff;font-size:15px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.12);cursor:pointer;-webkit-tap-highlight-color:transparent;text-align:center}
+.shutter{width:78px;height:78px;border-radius:50%;border:5px solid #fff;background:#fff;box-shadow:inset 0 0 0 4px #05070d;cursor:pointer;display:block;padding:0;-webkit-tap-highlight-color:transparent}
+.shutter:disabled{opacity:.35}.shutter:active{transform:scale(.94)}.shutter[hidden]{display:none}
+.vh{position:absolute!important;width:1px;height:1px;opacity:0;overflow:hidden;left:-9999px}
+body.noscroll{overflow:hidden}
+/* the bill built from the photo, at the top of the case page */
+.billcard{border:1px solid var(--line,#e4e7ec);border-radius:12px;padding:16px;margin:0 0 16px;background:#fff}
+.bc-h{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;border-bottom:1px dashed var(--line,#e4e7ec);padding-bottom:12px;margin-bottom:12px}
+.bc-h h3{margin:4px 0 2px;font-size:18px}.bc-amt{font-size:22px;font-weight:600;white-space:nowrap}
+.bc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;margin:0}
+.bc-grid dt{font-size:12px;color:#667085}.bc-grid dd{margin:2px 0 0;font-family:"IBM Plex Mono",monospace;font-size:14px;overflow-wrap:anywhere}
+.bc-grid dd.miss{color:#98a2b3;font-family:inherit}.lo{color:#b54708;font-size:12px;font-family:Inter,sans-serif}
+.bc-sec{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#667085;margin:16px 0 8px;font-weight:600}
+.bc-parties{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.bc-party{border:1px solid var(--line,#e4e7ec);border-radius:10px;padding:10px 12px}.bc-party b{display:block;font-size:15px;margin:2px 0}
+.mk{display:inline-block;font:600 11px/1 Inter,sans-serif;padding:3px 6px;border-radius:999px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+.mk.checked{background:#e7f6ec;color:#067647}.mk.read{background:#f2f4f7;color:#475467}.mk.computed{background:#eef4ff;color:#3538cd}
+.mk.invalid{background:#fef3f2;color:#b42318}.mk.conflict{background:#fffaeb;color:#b54708}
+.fnote{font:12px/1.35 Inter,sans-serif;color:#b54708;margin-top:2px;word-break:normal}.fnote.bad{color:#b42318}
+.bc-items{width:100%;border-collapse:collapse;font-size:13px}.bc-items th{font-weight:600;color:#667085;text-align:left;font-size:11px;padding:6px 4px;border-bottom:1px solid var(--line,#e4e7ec)}
+.bc-items td{padding:6px 4px;border-bottom:1px solid #f2f4f7;vertical-align:top}.bc-items .r{text-align:right;font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+.bc-sum{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px;max-width:420px;margin-left:auto}.bc-sum .r{text-align:right;font-family:"IBM Plex Mono",monospace}
+.bc-sum .t{font-weight:700;font-size:16px;border-top:1px solid var(--line,#e4e7ec);padding-top:6px}
+.bc-checks{list-style:none;padding:0;margin:0;font-size:13px}.bc-checks li{padding:4px 0;display:flex;gap:8px}.bc-checks .ok{color:#067647}.bc-checks .no{color:#b42318}
 .scanph{position:relative;align-self:start}.scanph img{width:100%;display:block;border-radius:4px}
 .scanph i{position:absolute;outline:2px solid #384ce3;background:rgba(56,76,227,.14);border-radius:2px}
 .scangrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
@@ -16,6 +54,18 @@
 </style>
 </head>
 <body>
+<div id="scanner" class="scn" hidden role="dialog" aria-label="Scan a bill">
+  <div class="scn-top"><span>Scan a bill</span><button class="scn-x" id="scnx" aria-label="Close">✕</button></div>
+  <div class="scn-view"><video id="cam" autoplay playsinline muted></video><img id="scnshot" alt="The photo being read" hidden><div class="scn-frame" id="scnframe"></div><div id="scnmsg" class="scn-msg" hidden></div></div>
+  <div class="scn-bar">
+    <label class="scn-side" for="pphoto">Photos</label>
+    <button class="shutter" id="shutter" aria-label="Capture the bill" disabled></button>
+    <label class="shutter" id="shutterL" for="pcam" aria-label="Take a photo of the bill" hidden></label>
+    <label class="scn-side" for="pcam">iPhone Camera</label>
+  </div>
+  <input id="pcam" class="vh" type="file" accept="image/*" capture="environment">
+  <input id="pphoto" class="vh" type="file" accept="image/*">
+</div>
 <div class="shell">
   <aside class="side">
     <div class="brand"><svg width="20" height="18" viewBox="0 0 26 22" fill="none" stroke="#384ce3" stroke-width="2"><path d="M13 2 24 7 13 12 2 7z"/><path d="M2 11.5 13 16.5 24 11.5"/><path d="M2 15.5 13 20.5 24 15.5"/></svg>Payables Desk</div>
@@ -104,32 +154,62 @@ async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
 const blobUrl=async p=>{const r=await fetch(p);return URL.createObjectURL(await r.blob())};
-async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
+async function go(id,arg){closeScanner();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
   try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
 
-/* scan a paper bill: same box and wiring on Dashboard and Inbox (needs #scanbtn in the topbar) */
-const scanBox=()=>`<div id="sz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Scan a paper bill · read on this machine, the photo never leaves it</span></div>
-   <div style="padding:14px;display:grid;gap:10px"><video id="cam" autoplay playsinline muted></video>
-   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="cap" disabled>Capture</button>
-   <label class="btn" style="cursor:pointer">Upload / take photo<input id="pfile" type="file" accept="image/*" capture="environment" hidden></label>
-   <span class="f3" id="smsg">Hold the whole bill flat in frame, in good light.</span></div></div></div>`;
-function wireScan(){
-  const sendPhoto=async src=>{const w0=src.videoWidth||src.naturalWidth,h0=src.videoHeight||src.naturalHeight,k=Math.min(1,2000/Math.max(w0,h0));
-    const c=document.createElement('canvas');c.width=Math.round(w0*k);c.height=Math.round(h0*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);
-    await busy($('#cap'),'Reading…',async()=>{$('#smsg').textContent='Reading the bill and running the checks…';
-      const r=await api('/api/scan',{image:c.toDataURL('image/jpeg',0.9)});
-      toast(`${esc(r.invoice_key)}: ${esc(LBL[r.state]||r.state||r.outcome||'already processed')}`);go('case',r.invoice_key)});
-    const m=$('#smsg');if(m)m.textContent='Hold the whole bill flat in frame, in good light.'};  // gone once the case page opened
-  $('#scanbtn').onclick=async()=>{const z=$('#sz');if(z.style.display!=='none'){z.style.display='none';stopCam();return}z.style.display='block';
-    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){$('#cam').style.display='none';$('#smsg').textContent='Live camera needs this page on localhost or https: use Upload / take photo.';return}
-    try{CAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});$('#cam').srcObject=CAM;$('#cap').disabled=false}
-    catch(e){$('#cam').style.display='none';$('#smsg').textContent='Camera not available ('+e.name+'): use Upload / take photo.'}};
-  $('#cap').onclick=()=>sendPhoto($('#cam'));
-  $('#pfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.src=URL.createObjectURL(f);
-    try{await img.decode()}catch(_){toast('Could not open that file as a picture: use JPG or PNG','err');return}sendPhoto(img)};
+/* scan a paper bill. The scanner is a full-screen layer, so it cannot open off-screen on a phone.
+   Live camera when the page is https or localhost and permission is given; otherwise the white button opens
+   the iPhone camera itself (file input with capture). Either way: photo -> /api/scan -> the case page. */
+const scanBox=()=>'';
+const scanMsg=(t,kind)=>{const m=$('#scnmsg');m.textContent=t||'';m.className='scn-msg'+(kind?' '+kind:'');m.hidden=!t};
+const liveMode=on=>{$('#cam').hidden=!on;$('#scnframe').hidden=!on;$('#shutter').hidden=!on;$('#shutterL').hidden=on};
+function closeScanner(){stopCam();const s=$('#scanner');if(s)s.hidden=true;document.body.classList.remove('noscroll')}
+async function openScanner(){
+  const s=$('#scanner');s.hidden=false;document.body.classList.add('noscroll');
+  $('#scnshot').hidden=true;$('#shutter').disabled=true;liveMode(true);
+  if(!(window.isSecureContext&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){
+    liveMode(false);return scanMsg('Tap the white button to take a photo of the bill.')}
+  scanMsg('Starting the camera…','busy');
+  try{
+    stopCam();
+    CAM=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1440}}});
+    if(s.hidden){stopCam();return}
+    const v=$('#cam');v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.srcObject=CAM;
+    await v.play().catch(()=>{});  // iOS: start it explicitly; autoplay alone can leave the preview black
+    await new Promise((ok,no)=>{const t0=Date.now();(function wait(){if(v.videoWidth>0)return ok();if(Date.now()-t0>8000)return no(new Error('no frames'));requestAnimationFrame(wait)})()});
+    $('#shutter').disabled=false;scanMsg('Fit the whole bill inside the frame, then tap the white button.');
+  }catch(e){stopCam();liveMode(false);
+    scanMsg(e.name==='NotAllowedError'?'Camera access was not allowed. Tap the white button to use the iPhone camera instead.':'Live camera is not available here. Tap the white button to use the iPhone camera.')}
 }
+function toCanvas(src,w0,h0){const k=Math.min(1,2000/Math.max(w0,h0)),c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w0*k));c.height=Math.max(1,Math.round(h0*k));c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c}
+async function fileToCanvas(f){const u=URL.createObjectURL(f);try{const img=new Image();img.src=u;
+  await (img.decode?img.decode():new Promise((ok,no)=>{img.onload=ok;img.onerror=no}));
+  return toCanvas(img,img.naturalWidth,img.naturalHeight)}finally{setTimeout(()=>URL.revokeObjectURL(u),1000)}}
+async function submitScan(c){
+  const data=c.toDataURL('image/jpeg',0.88);
+  if(data.length<2000){liveMode(false);return scanMsg('The photo came out empty. Tap the white button to try again.','err')}
+  const shot=$('#scnshot');shot.src=data;shot.hidden=false;$('#cam').hidden=true;$('#scnframe').hidden=true;$('#shutter').disabled=true;
+  scanMsg('Reading the bill and making the invoice… a few seconds','busy');
+  try{const r=await api('/api/scan',{image:data});
+    if(!r||!r.invoice_key)throw new Error('The server did not return an invoice.');
+    closeScanner();toast(`${esc(r.invoice_key)}: ${esc(LBL[r.state]||r.state||'already scanned')}`);go('case',r.invoice_key)}
+  catch(e){shot.hidden=true;liveMode(false);
+    scanMsg((/load failed|failed to fetch|network/i.test(e.message||'')?'Could not reach the app. Check the connection.':e.message||'The scan failed.')+' Tap the white button to try again.','err')}
+}
+async function onPicked(e){const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;
+  if($('#scanner').hidden){$('#scanner').hidden=false;document.body.classList.add('noscroll')}
+  stopCam();
+  let c;try{c=await fileToCanvas(f)}catch(_){liveMode(false);return scanMsg('That file could not be opened as a picture. Use a JPG, PNG or a new photo.','err')}
+  submitScan(c)}
+$('#scnx').onclick=closeScanner;
+$('#shutter').onclick=()=>{const v=$('#cam');if(!v.videoWidth)return scanMsg('The camera is still starting. Try again in a second.','err');
+  const c=toCanvas(v,v.videoWidth,v.videoHeight);stopCam();submitScan(c)};
+$('#pcam').onchange=onPicked;$('#pphoto').onchange=onPicked;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#scanner').hidden)closeScanner()});
+function wireScan(){const b=$('#scanbtn');if(b)b.onclick=openScanner}
 
 /* ============ screens ============ */
 async function dash(){
@@ -177,6 +257,49 @@ function src(s){if(!s||typeof s==='string')return s?` <span class="f3">· ${esc(
   const u=s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url.replace(/^https?:\/\/(www\.)?/,'').slice(0,48))}</a>`:esc(s.api||s.source||s.type||'');
   return ` <span class="f3">· ${u}${s.field?` · <span class="mono">${esc(s.field)}</span>`:''}${s.record_date?` · record ${esc(s.record_date)}`:''}${s.retrieved_at?` · retrieved ${esc(s.retrieved_at)}`:''}</span>${s.passage?`<span class="q">“${esc(String(s.passage).slice(0,220))}”</span>`:''}`}
 
+/* The bill read from the photo, Indian GST invoice layout. Every field says how sure we are:
+   checked (format check, arithmetic, words or Jev agree) · read · computed · invalid (shown as printed) · conflict (rules and Jev differ). */
+const MK={checked:'✓ checked',read:'read',computed:'computed',invalid:'✗ invalid',conflict:'⚠ compare with photo'};
+function billCard(x,v){
+  const b=x.bill;
+  if(!b){const F=x.scan.fields||{};return `<div class="billcard"><div class="lbl">Bill made from your photo</div><h3>${esc(v.legal_name||x.vendor_name_text||'Vendor not read')}</h3><div class="bc-amt">${x.amount_inr?inr(x.amount_inr):'not read'}</div></div>`}
+  const F=b.fields, val=k=>F[k]?F[k].value:null;
+  const mark=k=>{const f=F[k];if(!f)return '';const lo=f.conf<0.5&&f.status!=='computed'&&f.status!=='invalid';
+    return `<span class="mk ${lo?'conflict':f.status}" title="${esc(f.how||'')}${f.jev?' · Jev '+esc(f.jev):''}">${lo?'⚠ low confidence':MK[f.status]||f.status}${f.jev==='agrees'?' · Jev ✓':''}</span>`
+      +(f.note&&(f.status==='invalid'||f.status==='conflict')?`<div class="fnote ${f.status==='invalid'?'bad':''}">${esc(f.note)}</div>`:'')};
+  const show=(k,fmt)=>{const x0=val(k);return x0==null||x0===''?'<span class="miss">not printed</span>':esc(fmt?fmt(x0):x0)};
+  const d=iso=>{if(!iso)return iso;const t=new Date(iso+'T00:00:00');return isNaN(t)?iso:t.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})};
+  const row=(l,k,fmt)=>`<div><dt>${l}</dt><dd class="${val(k)==null?'miss':''}">${show(k,fmt)}${mark(k)}</dd></div>`;
+  const party=(title,role)=>{const has=F[role+'.name']||F[role+'.gstin'];if(!has&&role!=='seller')return '';
+    return `<div class="bc-party"><div class="lbl">${title}</div><b>${show(role+'.name')}</b>${mark(role+'.name')}
+      <div class="f3 mono" style="margin-top:4px">GSTIN ${show(role+'.gstin')}${mark(role+'.gstin')}</div>
+      ${F[role+'.state']?`<div class="f3">State ${esc(val(role+'.state'))}</div>`:''}</div>`};
+  const money=n=>n==null?'—':inr(n);
+  const taxes=['cgst','sgst','utgst','igst','cess'].filter(k=>F[k]);
+  const it=b.items||[];
+  const DOC={tax_invoice:'Tax invoice',invoice:'Invoice',bill_of_supply:'Bill of supply',credit_note:'Credit note',debit_note:'Debit note',proforma:'Proforma invoice',quotation:'Quotation',delivery_challan:'Delivery challan',receipt:'Receipt',unknown:'Document'};
+  return `<div class="billcard">
+   <div class="bc-h"><div><div class="lbl">Bill made from your photo · ${esc(DOC[b.doc_type]||b.doc_type)}</div><h3>${show('seller.name')}</h3>${mark('seller.name')}</div>
+    <div style="text-align:right"><div class="lbl">Total</div><div class="bc-amt">${F.total?inr(val('total')):'not read'}</div>${mark('total')}</div></div>
+   ${b.readable===false?`<div class="fnote bad" style="font-size:14px;margin-bottom:8px">${esc(b.quality_note||'Could not read this bill.')}</div>`:''}
+   <div class="bc-parties">${party('Seller (supplier)','seller')}${party('Buyer (bill to)','buyer')}${party('Consignee (ship to)','consignee')}</div>
+   <div class="bc-sec">Invoice</div>
+   <dl class="bc-grid">${row('Invoice no','invoice_no')}${row('Invoice date','invoice_date',d)}${F.due_date?row('Due date','due_date',d):''}${F.place_of_supply?row('Place of supply','place_of_supply'):''}
+    ${F.po_no?row('Buyer order / PO','po_no'):''}${F.irn?row('IRN (e-invoice)','irn'):''}${F.ack_no?row('Ack no','ack_no'):''}${F.ack_date?row('Ack date','ack_date',d):''}${F.eway_bill?row('E-way bill','eway_bill'):''}</dl>
+   ${it.length?`<div class="bc-sec">Items</div><div style="overflow-x:auto"><table class="bc-items"><thead><tr><th>Description</th><th>HSN/SAC</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>
+    ${it.map(i=>`<tr><td>${esc(i.description||'—')}</td><td class="mono">${esc(i.hsn||'—')}</td><td class="r">${i.qty!=null?esc(i.qty)+(i.unit?' '+esc(i.unit):''):'—'}</td><td class="r">${money(i.rate)}</td><td class="r">${money(i.amount)}</td></tr>`).join('')}</tbody></table></div>`:''}
+   <div class="bc-sec">Tax and total</div>
+   <div class="bc-sum">
+    ${F.taxable_value?`<span>Taxable value ${mark('taxable_value')}</span><span class="r">${money(val('taxable_value'))}</span>`:''}
+    ${taxes.map(k=>`<span>${k.toUpperCase()}${F[k+'_rate']?' @ '+esc(val(k+'_rate'))+'%':''} ${mark(k)}</span><span class="r">${money(val(k))}</span>`).join('')}
+    ${F.round_off?`<span>Round off</span><span class="r">${money(val('round_off'))}</span>`:''}
+    <span class="t">Total ${mark('total')}</span><span class="r t">${F.total?money(val('total')):'not read'}</span>
+    ${F.total_in_words?`<span class="f3" style="grid-column:1/-1">In words: ${money(val('total_in_words'))} (${esc(F.total_in_words.printed||'')})</span>`:''}
+   </div>
+   ${F['bank.account_no']||F['bank.ifsc']||F['bank.upi']?`<div class="bc-sec">Bank</div><dl class="bc-grid">${row('Account holder','bank.account_holder')}${row('Account no','bank.account_no')}${row('IFSC','bank.ifsc')}
+     ${F['bank.name']?row('Bank','bank.name'):''}${F['bank.branch']?row('Branch','bank.branch'):''}${F['bank.upi']?row('UPI ID','bank.upi'):''}</dl>`:''}
+   ${b.checks&&b.checks.length?`<div class="bc-sec">Checks on the bill itself</div><ul class="bc-checks">${b.checks.map(c=>`<li><span class="${c.ok?'ok':'no'}">${c.ok?'✓':'✗'}</span><span><b>${esc(nice(c.name))}</b> · ${esc(c.detail)}</span></li>`).join('')}</ul>`:''}
+   <div class="f3" style="margin-top:12px">Read on this machine in ${x.scan.read_ms} ms · ₹0 · ${b.jev?'Jev: '+esc(b.jev)+' · ':''}<a href="#" onclick="event.preventDefault();document.getElementById('ph').scrollIntoView({behavior:'smooth'})">see the photo and where each field came from</a></div></div>`}
 async function caseView(key){
   topbar(`<span class="mono">${esc(key)}</span>`,{crumb:'<a id="bk">Inbox</a>'});$('#bk').onclick=()=>go('inbox');
   V.innerHTML='<div style="padding:24px">'+skel(4)+'</div>';
@@ -189,6 +312,7 @@ async function caseView(key){
     <div class="banner ${s}"><span class="st ${s}">${ICON[s]||ICON.none}</span><div><h2>${head}</h2><p>${esc(d.reason)}</p>
       ${c.payment?`<p class="mono" style="margin-top:8px">${inr(c.payment.amount_inr)} → ${esc(c.payment.payee)} · a/c ${esc(c.payment.account)} · ref <span class="copy" data-copy="${esc(c.payment.ref)}">${esc(c.payment.ref)}</span> · approved by ${esc(c.payment.approved_by)}</p>`:''}</div></div>
     ${can?`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="hold" id="hold"><i class="fill"></i><span id="holdl">Hold to approve and pay ${inr(x.amount_inr)}</span></button><span class="f3">Press and hold for a second. Recorded as <b class="f2">${esc(ME&&ME.name||'AP lead')}</b>.</span></div>`:''}
+    ${x.scan?billCard(x,v):''}
     ${canRe?`<button class="btn" id="re">Replay checks</button>`:''}
     <div class="sec"><span class="lbl">Checks</span><span class="f3">${d.checks.filter(k=>k.result==='pass').length} of ${d.checks.length} passed</span></div>
     <div class="rail">${d.checks.map(k=>`<details class="chk" ${k.result!=='pass'?'open':''}><summary><span class="dot">${ICON[k.result]||ICON.none}</span><span class="name">${esc(chkName(k.check))}</span><span class="why">${esc(k.reasoning)}</span>${(k.evidence||[]).length?`<span class="chev">›</span>`:''}</summary>

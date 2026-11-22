@@ -103,6 +103,39 @@ class RowsTest(unittest.TestCase):
                  {"text": "₹1,58,400.00", "conf": 1.0, "box": [0.7803, 0.3596, 0.1178, 0.0237]}]
         self.assertEqual([r["text"] for r in scan.rows_from_lines(lines)], ["996812", "Grand Total:  ₹1,58,400.00"])
 
+    def test_tilted_page_keeps_neighbouring_printed_lines_apart(self):
+        # a hand-held photo tilted 4 degrees: each value sits as low as the next line's label, so grouping by
+        # height alone mixes the lines. The reader's corner points give the tilt, which is taken out first.
+        import math
+        W, H, a = 1000, 1400, math.radians(4)
+
+        def item(text, x, y, w, h=24):
+            pts = [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+            rot = [(px * math.cos(a) - py * math.sin(a), px * math.sin(a) + py * math.cos(a)) for px, py in pts]
+            xs, ys = [p[0] for p in rot], [p[1] for p in rot]
+            return {"text": text, "conf": 1.0, "box": [min(xs) / W, min(ys) / H, (max(xs) - min(xs)) / W, (max(ys) - min(ys)) / H],
+                    "quad": [c for px, py in rot for c in (px / W, py / H)]}
+        lines = [item("Bill To", 80, 240, 90), item("Invoice No:", 560, 240, 140), item("TCIE/26-27/3390", 760, 240, 200),
+                 item("Swiftline Logistics Pvt Ltd", 80, 280, 330), item("Invoice Date:", 560, 280, 150), item("16 Nov 2026", 760, 280, 140),
+                 item("Grand Total:", 460, 590, 150), item("₹1,58,400.00", 760, 590, 200)]
+        self.assertEqual([r["text"] for r in scan.rows_from_lines(lines, size=[W, H])],
+                         ["Bill To  Invoice No:  TCIE/26-27/3390", "Swiftline Logistics Pvt Ltd  Invoice Date:  16 Nov 2026",
+                          "Grand Total:  ₹1,58,400.00"])
+
+    def test_stray_mark_read_for_the_rupee_sign_before_a_grouped_amount_becomes_rupee(self):
+        row = lambda txt: scan.rows_from_lines([{"text": txt, "conf": 1.0, "box": [0.1, 0.5, 0.3, 0.02]}])[0]["text"]
+        self.assertEqual(row("Grand Total:  ·1,58,400.00"), "Grand Total:  ₹1,58,400.00")
+        self.assertEqual(row("Grand Total:  *2,36,000"), "Grand Total:  ₹2,36,000")
+        self.assertEqual(row("Item 3-1,500 units"), "Item 3-1,500 units")    # not after a space: left alone
+        self.assertEqual(ap.extract(row("Grand Total:  ·1,58,400.00"))["amount_inr"], 158400.0)
+
+    def test_colon_misread_as_semicolon_after_a_label_is_a_colon(self):
+        # read from a dark, tilted photo: "(Qty; 120)"
+        row = lambda txt: scan.rows_from_lines([{"text": txt, "conf": 1.0, "box": [0.1, 0.5, 0.3, 0.02]}])[0]["text"]
+        self.assertEqual(row("Freight services (Qty; 120)"), "Freight services (Qty: 120)")
+        self.assertEqual(ap.extract(row("Freight services (Qty; 120)"))["qty"], 120.0)
+        self.assertEqual(row("a;b ; c"), "a;b ; c")             # not glued to a word and followed by a space: left alone
+
     def test_rupee_sign_misread_as_letter_r_is_fixed_only_before_a_grouped_amount(self):
         # the browser re-encodes a photo before upload, and the reader then saw R1,58,400.00 instead of ₹1,58,400.00
         row = lambda txt: scan.rows_from_lines([{"text": txt, "conf": 1.0, "box": [0.1, 0.5, 0.3, 0.02]}])[0]["text"]
@@ -191,6 +224,51 @@ class ScanTest(Base):
         self.assertNotIn("scan", x)
         self.assertEqual(checks["sender_domain"]["result"], "fail")
 
+    def tally_reader(self):
+        with open(os.path.join(FIX, "ocr", "tally_einvoice.json")) as f:
+            d = json.load(f)
+        return lambda path: {"reader": "fake", "lines": d["lines"], "size": d["size"]}
+
+    def test_indian_bill_is_read_into_the_invoice_with_the_sellers_gstin(self):
+        scan.read_image = self.tally_reader()
+        out = scan.scan_bytes(JPEG)
+        _, x = self.checks(out)
+        self.assertEqual(x["invoice_no"], "SHB/456/20")
+        self.assertEqual(x["amount_inr"], 4130.0)
+        self.assertEqual(x["gstin"], "29AACCT3705E000")                    # the seller's, not the buyer's 29AAFFC8126N1ZZ
+        self.assertEqual(x["vendor_name_text"], "Surabhi Hardwares, Bangalore")
+        self.assertEqual(x["bill"]["fields"]["buyer.gstin"]["value"], "29AAFFC8126N1ZZ")
+        self.assertEqual(x["scan"]["fields"]["amount_inr"]["status"], "checked")
+
+    def test_rules_and_jev_disagreeing_holds_the_bill(self):
+        from vendorcheck import bill, jev
+        scan.read_image = self.tally_reader()
+        real = jev.ask
+        seen = {}
+        real_review = bill.review_with_jev
+
+        def review(b, job):
+            seen["bill"] = b
+            return real_review(b, job)
+
+        def ask(job_id, state, questions):
+            if not all(q.get("type") == "choice" and "o1" in q.get("criteria", {}) for q in questions.values()):
+                raise jev.Unavailable("only the bill review is faked here")
+            # Jev picks a candidate other than the rules' pick, every time
+            return {k: {"choice": next(o for o in q["criteria"] if o not in ("none", bill.jev_rule_choice(seen["bill"], k))),
+                        "confidence": 0.95} for k, q in questions.items()}, {"model": "jev-test"}
+        bill.review_with_jev = review
+        self.addCleanup(setattr, bill, "review_with_jev", real_review)
+        jev.ask = ask
+        try:
+            out = scan.scan_bytes(JPEG)
+        finally:
+            jev.ask = real
+        checks, x = self.checks(out)
+        self.assertEqual(out["state"], "held")
+        self.assertEqual(checks["legibility"]["result"], "warn")
+        self.assertIn("Jev", checks["legibility"]["reasoning"])
+
     def test_not_a_photo_is_refused(self):
         with self.assertRaises(scan.ScanError):
             scan.scan_bytes(b"%PDF-1.7 not an image")
@@ -232,6 +310,17 @@ class RealPhotoTest(Base):
                 checks, x = self.checks(out)
                 self.assertEqual(checks["legibility"]["result"], "pass", checks["legibility"]["reasoning"])
                 self.assertEqual(got, expected, x)
+
+    def test_hand_held_shots_read_every_field_of_the_bill(self):
+        # tilted 7 degrees; shot at an angle (keystone); dark and tilted -5 degrees
+        for photo, source in (("10_hand_tilt7", "01_shadowfax_invoice"), ("11_hand_keystone", "02_shreeji_invoice"),
+                              ("12_hand_dark_tilt", "06_tci_invoice_new_account")):
+            want = ap.extract(open(os.path.join(FIX, "inbox", source + ".txt")).read())
+            r = scan.read_image(os.path.join(BILLS, photo + ".jpg"))
+            got = ap.extract("\n".join(x["text"] for x in scan.rows_from_lines(r["lines"], size=r.get("size"))))
+            with self.subTest(photo=photo):
+                for k in ("invoice_no", "po_no", "amount_inr", "qty", "gstin", "account_no", "ifsc"):
+                    self.assertEqual(got[k], want[k], k)
 
     def test_blurred_dark_photo_is_held_as_cannot_read(self):
         with open(os.path.join(BILLS, "99_unreadable.jpg"), "rb") as f:
