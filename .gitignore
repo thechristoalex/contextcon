@@ -20,6 +20,7 @@ data/fixtures/inbox/scan_*.txt
 .venv/
 data/services/
 docs/latex/*.log
+data/vendorcheck.backup.*.db
 
 # PP Mondwest: trial licence, not redistributable; keep the file local only
 vendorcheck/static/PPMondwest-Regular.otf

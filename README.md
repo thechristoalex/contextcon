@@ -14,6 +14,12 @@ against the vendor master, the PO and goods receipt, and live company, web and n
 Then it does one of two things: **it pays exactly once after a person approves**, or **it holds the
 invoice and says why, citing the page and the date the evidence came from.**
 
+## ▶ Demo video (2 minutes)
+
+[![Watch the 2-minute demo](docs/demo.gif)](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)
+
+**[▶ Watch the demo on Google Drive](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)**. The preview above is the full demo sped up 10×, silent. Click it for the real video with sound.
+
 Design, invariants, schema and failure model: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 ![System architecture](docs/system-latex.png)
@@ -127,6 +133,8 @@ python3 -m vendorcheck.cli scan path/to/bill.jpg                   # photo → l
 python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv
 python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
 ```
+
+**Demo walkthrough:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md), the use case from the video step by step; `scripts/demo_reset.sh` restores a clean state.
 
 **Crash test:** `CRASH_AFTER_APPROVE=1 python3 -m vendorcheck.cli approve <key> --by X`, then
 `python3 -m vendorcheck.cli resume`. The invoice is paid once; a second `resume` or `approve` changes nothing.
