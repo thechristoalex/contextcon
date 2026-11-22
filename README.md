@@ -129,7 +129,7 @@ A typical month for a mid-size 3PL (40 new vendors, 2,000 invoices, 1,000 bank l
 
 - **119 offline tests** with canned Crustdata responses and a fresh database each: bill parsing (29), scanning (23), unknown senders (22), payables and crash-resume (11), procurement incl. 6 concurrent payments → 1 recorded (10), GST registry (10), bank lines (9), website fetch (5).
 - **Live runs** against Crustdata produced every result above.
-- **A headless-Chrome audit** clicked all 202 controls across 13 screens and every keyboard shortcut. It found three bugs; all three are fixed and covered by tests.
+- **A headless-Chrome audit** clicked all 202 controls across 13 screens and every keyboard shortcut. It found three bugs, all fixed: Replay filing an original as its own duplicate (now a regression test), parallel reads seeing existing invoices as missing (one SQLite connection per thread; 100/100 under a 20-way burst), and dead vendor rows on the Procurement screen.
 
 ## Approaches we tried
 
