@@ -1,5 +1,8 @@
 .DS_Store
 .env
+.env.*
+!.env.example
+logs/
 data/*.db*
 __pycache__/
 *.pyc
