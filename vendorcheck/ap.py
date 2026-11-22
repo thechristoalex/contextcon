@@ -333,6 +333,70 @@ def check_trust(v):
     return chk("vendor_trust", "fail" if red else "warn", reasons, ev, weight=60 if red else 20), rep
 
 
+# ---------------- bills from senders not on file: who is this business? ----------------
+
+FREE_MAIL = {"gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "outlook.com", "hotmail.com", "live.com",
+             "rediffmail.com", "icloud.com", "proton.me", "protonmail.com"}
+
+
+def bill_request(x):
+    """A vendor-check request built only from what the bill says about its sender. None if there is no name or
+    company domain to look up. The id depends on the business, not the invoice, so a second bill reuses the report."""
+    name = (x.get("vendor_name_text") or x.get("account_name") or "").strip() or None
+    domain = x.get("sender_domain")
+    domain = None if not domain or domain in FREE_MAIL else domain
+    if not name and not domain:
+        return None
+    gstin = x.get("gstin")
+    rid = hashlib.sha256(f"{name}|{domain}|{gstin}".lower().encode()).hexdigest()[:12]
+    return {"vendor_name": name, "website": domain, "gstin": gstin, "request_id": f"bill:{rid}"}
+
+
+def _gstin_only_check(g):
+    """No name or company domain to look up, but a GSTIN: report what the number itself proves, with no API call."""
+    p = pipeline.gstin_profile(g)
+    src = "GSTIN on the bill"
+    ev = [{"source": src, "field": "GSTIN", "value": p["gstin"]}]
+    if not p["valid"]:
+        return chk("background_check", "fail", f"No business name or company email to look up, and the GSTIN {g} fails the check-character test: not a real GST number", ev, weight=60)
+    ev += [{"source": src, "field": "state", "value": p["state"] or f"unknown code {p['state_code']}"},
+           {"source": src, "field": "PAN", "value": p["pan"]},
+           {"source": src, "field": "PAN holder type", "value": p["pan_type"] or "unknown"}]
+    return chk("background_check", "info", f"No business name or company email to look up. The GSTIN is well-formed: registered in "
+               f"{p['state'] or 'an unknown state'}, PAN {p['pan']} held by {('an ' if (p['pan_type'] or '')[:1] in 'aeiou' else 'a ') + (p['pan_type'] or 'unknown holder type')}", ev)
+
+
+def check_unknown_vendor(x):
+    """Run the vendor check on a business that is not on file. Returns (checks, report).
+    It informs the person who reviews the bill. It never makes the bill payable: an unknown vendor stays held."""
+    req = bill_request(x)
+    if not req:
+        if x.get("gstin"):
+            return [_gstin_only_check(x["gstin"])], None
+        return [chk("background_check", "info", "Nothing to look up: the bill names no business, company email domain or GSTIN")], None
+    try:
+        rep = pipeline.run_request(req)
+    except Exception as e:  # any failure holds the bill; it never stops the inbox
+        return [chk("background_check", "unavailable", f"Background check on {req['vendor_name'] or req['website']} could not run: {e}. "
+                    "Not the same as 'no record'; held until it can be checked", weight=50)], None
+    ev = [{"claim": f["claim"], "value": f["value"], "source": f["source"]} for f in rep["facts"]]
+    who = (rep.get("entity") or {}).get("name") or req["vendor_name"] or req["website"]
+    if rep["verdict"] == "CLEAR":
+        out = [chk("background_check", "warn", f"{who} appears to be a real, active company ({rep['summary']}), but it is not a vendor on file. "
+                   "Add it to the vendor master before paying", ev)]
+    else:
+        why = "; ".join([f["reason"] for f in rep["flags"]] + rep["cannot_verify"]) or rep["summary"]
+        out = [chk("background_check", "fail", f"Background check on {who}: {rep['verdict'].replace('_', ' ').lower()}. {why}", ev, weight=20)]
+    legal = (rep.get("entity") or {}).get("name")
+    if legal and x.get("account_name"):
+        aev = [{"source": "invoice", "field": "account name", "value": x["account_name"]}, {"source": "background check", "field": "legal name", "value": legal}]
+        if pipeline.norm_tokens(x["account_name"]) == pipeline.norm_tokens(legal):
+            out.append(chk("account_name", "pass", f"Bank account is in the name of {legal}, the company the background check found", aev))
+        else:
+            out.append(chk("account_name", "warn", f"Bank account name '{x['account_name']}' is not {legal}, the company the background check found", aev, weight=15))
+    return out, rep
+
+
 def check_business(job_id, x, v):
     """Does the vendor's own website describe the business this invoice bills for? Jev reads the page the
     vendor check already fetched (0 Crustdata credits); the invoice or PO and the page stay the sources."""
@@ -405,8 +469,9 @@ def process_file(path, text=None):
 
     v, how = identify_vendor(x, vmap)
     if not v:
-        outcome = _finish(path, chash, None, "unknown", x, "held", checks + document_signals(jr, x, None) + [chk("vendor_identified", "fail", "No vendor on record matches the GSTIN, sender domain or name", weight=80)])
-        return outcome
+        bg, report = check_unknown_vendor(x)
+        return _finish(path, chash, None, "unknown", x, "held", checks + document_signals(jr, x, None) +
+                       [chk("vendor_identified", "fail", "No vendor on record matches the GSTIN, sender domain or name", weight=80)] + bg, trust=report)
     checks.append(chk("vendor_identified", "pass", f"{v['legal_name']} ({v['vendor_id']}) matched by {how}", [{"source": "vendor master", "field": how, "value": v.get(how if how != 'name' else 'legal_name')}]))
     checks += document_signals(jr, x, v)
 

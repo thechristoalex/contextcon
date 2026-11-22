@@ -107,3 +107,117 @@ class KnownVendorTest(PatchedCheck):
         ap.process_file(os.path.join(ap.FIX, "inbox", "01_shadowfax_invoice.txt"))
         req = next(r for r in fake.calls if r["vendor_name"] == "Shadowfax Technologies Limited")
         self.assertEqual(req["gstin"], ap.vendors()["V001"]["gstin"])
+
+
+NEW_GSTIN = with_check_char("07AAACD1234E1Z")   # a well-formed company GSTIN that no vendor on file carries
+
+
+def bill(sender=None, vendor=None, gstin=None, invoice_no="DL-1", account_name=None, amount="10,000.00"):
+    head = [f"From: Billing <{sender}>", "Subject: Invoice", ""] if sender else []
+    body = ["TAX INVOICE"] + ([f"Vendor: {vendor}"] if vendor else []) + ([f"GSTIN: {gstin}"] if gstin else []) + \
+           [f"Invoice No: {invoice_no}", "Invoice Date: 20 Nov 2026", f"Grand Total: ₹{amount}"] + \
+           ([f"Account Name: {account_name}"] if account_name else [])
+    return "\n".join(head + body) + "\n"
+
+
+class UnknownVendorTest(PatchedCheck):
+    def process(self, text, name="bill.txt"):
+        path = os.path.join(self.tmp, name)
+        with open(path, "w") as f:
+            f.write(text)
+        out = ap.process_file(path)
+        row = next(r for r in ap.invoices() if r["source_file"] == path)
+        d = json.loads(row["decision_json"])
+        return out, d, {c["check"]: c for c in d["checks"]}
+
+    def test_unknown_vendor_is_looked_up_and_held(self):
+        fake = self.use(FakeVendorCheck("CLEAR", "Delhivery Limited"))
+        out, d, checks = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited", gstin=NEW_GSTIN))
+        self.assertEqual(out["state"], "held")                                   # never paid: not a vendor on file
+        self.assertEqual(len(fake.calls), 1)
+        self.assertEqual(fake.calls[0]["vendor_name"], "Delhivery Limited")
+        self.assertEqual(fake.calls[0]["website"], "delhivery.com")
+        self.assertEqual(fake.calls[0]["gstin"], NEW_GSTIN)
+        bc = checks["background_check"]
+        self.assertEqual((bc["result"], bc["weight"]), ("warn", 0))
+        self.assertIn("not a vendor on file", bc["reasoning"])
+        self.assertTrue(bc["evidence"] and bc["evidence"][0]["source"])          # facts carry their sources
+        self.assertEqual(d["trust_report"]["verdict"], "CLEAR")
+        self.assertEqual(checks["vendor_identified"]["result"], "fail")
+
+    def test_unknown_vendor_flagged_by_lookup_fails_the_check(self):
+        self.use(FakeVendorCheck("HOLD", "Delhivery Limited", flags=[{"severity": "red", "reason": "Company record is dormant"}]))
+        out, d, checks = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited"))
+        self.assertEqual(out["state"], "held")
+        self.assertEqual((checks["background_check"]["result"], checks["background_check"]["weight"]), ("fail", 20))
+        self.assertIn("dormant", checks["background_check"]["reasoning"])
+
+    def test_cannot_verify_fails_the_check(self):
+        self.use(FakeVendorCheck("CANNOT_VERIFY", None))
+        out, d, checks = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited"))
+        self.assertEqual(checks["background_check"]["result"], "fail")
+        self.assertIn("no registry record", checks["background_check"]["reasoning"])
+
+    def test_free_mail_is_not_a_website(self):
+        fake = self.use(FakeVendorCheck())
+        self.process(bill(sender="ramesh.traders@gmail.com", vendor="Ramesh Traders"))
+        self.assertIsNone(fake.calls[0]["website"])
+        self.assertEqual(fake.calls[0]["vendor_name"], "Ramesh Traders")
+
+    def test_nothing_to_look_up(self):
+        fake = self.use(FakeVendorCheck())
+        out, d, checks = self.process(bill(sender="someone@gmail.com"))
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(out["state"], "held")
+        self.assertEqual(checks["background_check"]["result"], "info")
+        self.assertIn("nothing", checks["background_check"]["reasoning"].lower())
+
+    def test_gstin_only_bill_gets_offline_profile_without_a_call(self):
+        fake = self.use(FakeVendorCheck())
+        out, d, checks = self.process(bill(gstin=INDIVIDUAL_GSTIN))
+        self.assertEqual(fake.calls, [])
+        self.assertEqual(out["state"], "held")
+        bc = checks["background_check"]
+        self.assertEqual(bc["result"], "info")
+        vals = {e["field"]: e["value"] for e in bc["evidence"]}
+        self.assertEqual(vals["state"], "Maharashtra")
+        self.assertEqual(vals["PAN holder type"], "individual")
+
+    def test_invalid_gstin_only_bill_fails(self):
+        self.use(FakeVendorCheck())
+        out, d, checks = self.process(bill(gstin=INDIVIDUAL_GSTIN[:-1] + ("0" if INDIVIDUAL_GSTIN[-1] != "0" else "1")))
+        self.assertEqual((checks["background_check"]["result"], checks["background_check"]["weight"]), ("fail", 60))
+
+    def test_lookup_error_holds_instead_of_crashing(self):
+        for err in (ValueError("bad request"), crust.ApiError(503, {"error": "down"})):
+            self.use(FakeVendorCheck(error=err))
+            out, d, checks = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited", invoice_no=f"E-{id(err)}"),
+                                          name=f"err_{id(err)}.txt")
+            self.assertEqual(out["state"], "held")
+            self.assertEqual(checks["background_check"]["result"], "unavailable")
+
+    def test_same_business_reuses_one_lookup(self):
+        fake = self.use(FakeVendorCheck())
+        self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited", invoice_no="DL-1"), "a.txt")
+        self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited", invoice_no="DL-2"), "b.txt")
+        self.assertEqual(len(fake.calls), 2)
+        self.assertEqual(fake.calls[0]["request_id"], fake.calls[1]["request_id"])   # same job id, so the stored report is reused
+
+    def test_account_name_matches_legal_name_ignoring_suffixes(self):
+        self.use(FakeVendorCheck("CLEAR", "TCI Freight Limited"))
+        _, _, checks = self.process(bill(sender="a@tcifreight.in", vendor="TCI Freight", account_name="TCI Freight Pvt. Ltd."), "same.txt")
+        self.assertEqual(checks["account_name"]["result"], "pass")
+        _, _, checks = self.process(bill(sender="a@tcifreight.in", vendor="TCI Freight", account_name="Sunil Enterprises", invoice_no="X-2"), "other.txt")
+        self.assertEqual((checks["account_name"]["result"], checks["account_name"]["weight"]), ("warn", 15))
+
+    def test_replay_after_an_outage_runs_the_lookup_again(self):
+        fake = self.use(FakeVendorCheck(error=crust.ApiError(503, {"error": "down"})))
+        out, _, checks = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited"))
+        self.assertEqual(checks["background_check"]["result"], "unavailable")
+        fake.error = None
+        r = ap.recheck(next(i["invoice_key"] for i in ap.invoices()))
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["after"]["state"], "held")
+        d = json.loads(next(i["decision_json"] for i in ap.invoices()))
+        self.assertEqual({c["check"]: c["result"] for c in d["checks"]}["background_check"], "warn")
+        self.assertEqual(len(fake.calls), 2)
