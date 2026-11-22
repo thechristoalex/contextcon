@@ -529,10 +529,11 @@ def _finish(path, chash, key, vendor_id, x, state, checks, draft=None, duplicate
     decision = {"state": state, "reason": reason, "checks": checks, **score, "draft_message": draft, "duplicate_of": duplicate_of,
                 "trust_report": trust, "cost_credits": trust["cost"]["credits"] if trust else 0}
     now = time.time()
+    key = key or f"unknown:{chash}"  # the key it is stored under, so the app can open the case
     with store._lock:
         store.db().execute("""INSERT INTO invoices(invoice_key, source_file, doc_type, vendor_id, extracted_json, state, decision_json, created_at, updated_at)
                               VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(invoice_key) DO NOTHING""",
-                           (key or f"unknown:{chash}", path, x["doc_type"], vendor_id, json.dumps(x), state, json.dumps(decision), now, now))
+                           (key, path, x["doc_type"], vendor_id, json.dumps(x), state, json.dumps(decision), now, now))
         store.db().execute("INSERT OR REPLACE INTO files_seen VALUES (?,?,?,?,?)", (path, chash, key, state, now))
     store.log(f"inv:{os.path.basename(path)}", f"{state.upper()}: {reason[:160]}")
     if state == "awaiting_approval" and x.get("amount_inr") and x["amount_inr"] <= CONFIG.get("auto_approve_below_inr", 0):

@@ -171,7 +171,7 @@ flowchart LR
 ## How we tested it
 
 - **Live runs** with Crustdata on 22 Nov 2026 produced the results tables above.
-- **Offline tests:** 54 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
+- **Offline tests:** 55 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
   - `tests/test_payables.py` (9 tests):
     - every inbox outcome
     - re-running the inbox changes nothing
@@ -189,7 +189,7 @@ flowchart LR
     - reconciling a transfer to exactly one payment
     - a source outage, the cost limit and the cost report
   - `tests/test_scan.py` (17 tests): reading bill photos, rows and the rupee-sign fixes; 2 use the real reader
-  - `tests/test_background.py` (19 tests):
+  - `tests/test_background.py` (20 tests):
     - PAN holder type and the company-name rule
     - every background-check outcome for an unknown sender
     - free mail, nothing to look up, GSTIN only

@@ -222,6 +222,12 @@ class UnknownVendorTest(PatchedCheck):
         self.assertEqual({c["check"]: c["result"] for c in d["checks"]}["background_check"], "warn")
         self.assertEqual(len(fake.calls), 2)
 
+    def test_result_carries_the_stored_key_so_the_app_can_open_the_case(self):
+        self.use(FakeVendorCheck())
+        out, _, _ = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited"))
+        self.assertEqual(out["invoice_key"], next(i["invoice_key"] for i in ap.invoices()))
+        self.assertTrue(out["invoice_key"].startswith("unknown:"))
+
 
 class WebsiteFetchTest(TempStore):
     """delhivery.com only has a certificate for www.delhivery.com: a live site must not be flagged as dead."""
