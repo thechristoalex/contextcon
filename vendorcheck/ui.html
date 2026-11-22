@@ -183,10 +183,11 @@ async function go(id,arg){stopCam();$('#drawer')&&$('#drawer').classList.remove(
 window.go=go;
 
 /* scan a paper bill: same box and wiring on Dashboard and Inbox (needs #scanbtn in the topbar) */
-const scanBox=()=>`<div id="sz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Scan a paper bill · read on this machine, the photo never leaves it</span></div>
+/* cameraOnly: the Dashboard already shows its own "Scan a bill" card with Upload, so the box there is just the camera view */
+const scanBox=({cameraOnly=false}={})=>`<div id="sz" data-camonly="${cameraOnly?1:''}" style="display:none;margin-bottom:14px" class="box">${cameraOnly?'':`<div class="hd"><span class="lbl">Scan a paper bill · read on this machine, the photo never leaves it</span></div>`}
    <div style="padding:14px;display:grid;gap:10px"><video id="cam" autoplay playsinline muted></video>
    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="cap" disabled>Capture</button>
-   <label class="btn" style="cursor:pointer">Upload / take photo<input id="pfile" type="file" accept="image/*" capture="environment" hidden></label>
+   ${cameraOnly?`<input id="pfile" type="file" accept="image/*" hidden>`:`<label class="btn" style="cursor:pointer">Upload / take photo<input id="pfile" type="file" accept="image/*" capture="environment" hidden></label>`}
    <span class="f3" id="smsg">Hold the whole bill flat in frame, in good light.</span></div></div></div>`;
 function wireScan(){
   const sendPhoto=async src=>{const w0=src.videoWidth||src.naturalWidth,h0=src.videoHeight||src.naturalHeight,k=Math.min(1,2000/Math.max(w0,h0));
@@ -195,10 +196,14 @@ function wireScan(){
       const r=await api('/api/scan',{image:c.toDataURL('image/jpeg',0.9)});
       toast(`${esc(r.invoice_key)}: ${esc(LBL[r.state]||r.state||r.outcome||'already processed')}`);go('case',r.invoice_key)});
     const m=$('#smsg');if(m)m.textContent='Hold the whole bill flat in frame, in good light.'};  // gone once the case page opened
-  $('#scanbtn').onclick=async()=>{const z=$('#sz');if(z.style.display!=='none'){z.style.display='none';stopCam();return}z.style.display='block';
-    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){$('#cam').style.display='none';$('#smsg').textContent='Live camera needs this page on localhost or https: use Upload / take photo.';return}
-    try{CAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});$('#cam').srcObject=CAM;$('#cap').disabled=false}
-    catch(e){$('#cam').style.display='none';$('#smsg').textContent='Camera not available ('+e.name+'): use Upload / take photo.'}};
+  $('#scanbtn').onclick=async()=>{const z=$('#sz');if(z.style.display!=='none'){z.style.display='none';stopCam();return}
+    const camOnly=!!z.dataset.camonly;
+    // camera-only box: if there is no camera, say so and keep the box closed (Upload is right there in the card)
+    const noCam=why=>{if(camOnly){z.style.display='none';toast(why+': use Upload','err')}else{z.style.display='block';$('#cam').style.display='none';$('#smsg').textContent=why+': use Upload / take photo.'}};
+    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){noCam('Live camera needs this page on localhost or https');return}
+    try{CAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});
+      z.style.display='block';$('#cam').style.display='';$('#cam').srcObject=CAM;$('#cap').disabled=false}
+    catch(e){noCam('Camera not available ('+e.name+')')}};
   $('#cap').onclick=()=>sendPhoto($('#cam'));
   const fromFile=async f=>{if(!f)return;const img=new Image();img.src=URL.createObjectURL(f);
     try{await img.decode()}catch(_){toast('Could not open that file as a picture: use JPG or PNG','err');return}sendPhoto(img)};
@@ -244,7 +249,7 @@ async function dash(){
    <div class="drop" id="drop"><div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#384ce3" stroke-width="1.8"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg></div>
      <div><b>Scan a bill</b><span>Drop a photo here, or use the camera. Read on this machine, then every check runs.</span></div>
      <div class="go"><button class="btn primary" id="scanbtn">Use camera</button><label class="btn" style="cursor:pointer">Upload<input id="pf2" type="file" accept="image/*" hidden></label></div></div>
-   ${scanBox()}
+   ${scanBox({cameraOnly:true})}
    <div class="minor"><a id="m1">Paste an invoice or email</a><a id="m2">Post bank lines</a><a id="m3">Process the inbox folder</a></div>
    <div class="kgrid">
     <div class="kc" data-go="inbox" data-f="awaiting_approval"><div class="lbl">Needs approval</div><div class="v" data-count="${sum(w)}" data-fmt="inr">0</div><div class="s">${w.length} invoice${w.length===1?'':'s'}</div></div>
