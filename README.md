@@ -8,6 +8,12 @@ duplicates, bank-detail changes, look-alike senders and prompt injection. It the
 after a person approves**, or **holds the invoice with a cited reason**. It also reads paper bills
 from a photo on the local machine and reconciles bank-statement lines.
 
+## ▶ Demo video (2 minutes)
+
+[![Watch the 2-minute demo](docs/demo-thumb.jpg)](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)
+
+**[▶ Watch the demo on Google Drive](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)**. GitHub cannot play Drive videos inline, so the picture links to the player.
+
 Design, invariants, schema and failure model: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 | Diagram | Public link |
@@ -33,12 +39,6 @@ Rebuild the figures with `cd docs/latex && tectonic system.tex && tectonic state
 | **Input** | `.txt`/`.eml` invoices or bill photos, vendor master, POs, goods receipts (`data/fixtures/`), bank-statement CSV |
 | **Output** | `PAID` (ledger entry + idempotency key), `HELD` (cited reason + drafted call-back), `DUPLICATE` (linked to the original), `REJECTED` (not payable) |
 | **Pass mark** | No invoice paid twice. No payment to an unverified account or vendor. Every fact cites a source and date. "Cannot verify" instead of a guess. A kill at any point resumes without repeating an action |
-
-## ▶ Demo video (2 minutes)
-
-[![Watch the 2-minute demo](docs/demo-thumb.jpg)](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)
-
-**[▶ Watch the demo on Google Drive](https://drive.google.com/file/d/1adEHiQK3HO-6YJY3ulqU43AA9mM9N90C/view?usp=sharing)**. GitHub cannot play Drive videos inline, so the picture links to the player.
 
 ## Run
 
