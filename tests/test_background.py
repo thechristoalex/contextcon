@@ -255,7 +255,7 @@ class WebsiteFetchTest(TempStore):
         live = {"success": True, "title": "Delhivery", "content": "<p>" + "Delhivery logistics and supply chain services. " * 10 + "</p>"}
         w, calls = self.fetch({"https://delhivery.com": {"success": False, "message": "URL navigation failed: net::ERR_CERT_COMMON_NAME_INVALID"},
                                "https://www.delhivery.com": live})
-        self.assertEqual(calls, ["https://delhivery.com", "https://www.delhivery.com"])
+        self.assertEqual(calls, ["https://delhivery.com", "https://delhivery.com", "https://www.delhivery.com"])  # standard, human_mode, www
         self.assertTrue(w["ok"])
         self.assertEqual(w["url"], "https://www.delhivery.com")
         self.assertIn("ERR_CERT_COMMON_NAME_INVALID", w["tried"][0]["error"])
@@ -269,5 +269,23 @@ class WebsiteFetchTest(TempStore):
     def test_both_fail_records_why(self):
         w, calls = self.fetch({})
         self.assertFalse(w["ok"])
-        self.assertEqual(len(w["tried"]), 2)
-        self.assertIn("ERR_NAME_NOT_RESOLVED", w["tried"][1]["error"])
+        self.assertEqual(len(w["tried"]), 3)
+        self.assertEqual([t["fetched_with"] for t in w["tried"]], ["standard", "human_mode", "human_mode"])
+        self.assertIn("ERR_NAME_NOT_RESOLVED", w["tried"][2]["error"])
+
+    def test_www_site_falls_back_to_the_bare_host(self):
+        live = {"success": True, "title": "Acme", "content": "<p>" + "Acme freight services. " * 20 + "</p>"}
+        real = crust.call
+        calls = []
+
+        def fake(job_id, endpoint, body, use_cache=True):
+            calls.append(body["urls"][0])
+            page = live if body["urls"][0] == "https://acme.in" else {"success": False, "message": "net::ERR_CERT_COMMON_NAME_INVALID"}
+            return [page], {"retrieved_at": time.time(), "cache_hit": False, "endpoint": endpoint, "req_hash": "t"}
+        crust.call = fake
+        try:
+            w = pipeline.Job({"vendor_name": "Acme", "request_id": "t-www"}).s_website("https://www.acme.in")
+        finally:
+            crust.call = real
+        self.assertTrue(w["ok"])
+        self.assertEqual(calls[-1], "https://acme.in")
