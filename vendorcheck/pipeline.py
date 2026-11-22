@@ -7,13 +7,14 @@ Each step is checkpointed; a restarted job skips finished steps and re-uses cach
 API responses, so nothing is paid for or done twice.
 """
 import hashlib
+import html as html_lib
 import json
 import re
 import time
 import urllib.parse
 from datetime import datetime
 
-from . import crust, store
+from . import crust, jev, store
 from .config import ADVERSE_TERMS, CONFIG
 
 SUFFIXES = {"pvt", "private", "ltd", "limited", "llp", "inc", "co", "company", "corp", "corporation",
@@ -82,6 +83,22 @@ def first_list(x):
     return []
 
 
+def visible_text(html):
+    """Page HTML -> the text a visitor sees: no scripts, styles or tags."""
+    html = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", html or "")
+    return re.sub(r"\s+", " ", html_lib.unescape(re.sub(r"<[^>]+>", " ", html))).strip()
+
+
+def website_text(job_id):
+    """(visible text, url) of the website a vendor check fetched, re-read from the response cache (0 credits)."""
+    w = store.get_step(job_id, "website")
+    if not w or not w.get("ok"):
+        return None, None
+    c = store.cache_get((w.get("meta") or {}).get("req_hash") or "")
+    rows = first_list(json.loads(c["response_json"])) if c else []
+    return (visible_text(rows[0].get("content")) if rows else w.get("text")), w.get("url")
+
+
 def is_redirect(url):
     return bool(url) and ("google.com/goto" in url or "google.com/url?" in url)
 
@@ -109,6 +126,7 @@ class Job:
         self.facts = []      # {claim, value, source}
         self.flags = []      # {severity: red|amber, reason, source}
         self.missing = []    # what could not be verified and why
+        self.decisions = []  # what Jev decided about fetched text (decisions, not sources)
 
     # each step: run once, checkpoint result
     def step(self, name, fn):
@@ -189,9 +207,7 @@ class Job:
     def s_website(self, url):
         resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": [url]})
         page = first_list(resp)[0] if first_list(resp) else {}
-        content = page.get("content") or ""
-        text = re.sub(r"<[^>]+>", " ", content)
-        text = re.sub(r"\s+", " ", text)
+        text = visible_text(page.get("content"))
         return {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or url, "meta": meta}
 
     # ---------- step 4: registry identifiers from the web ----------
@@ -207,8 +223,7 @@ class Job:
         for page in first_list(resp):
             if not page.get("success"):
                 continue
-            html = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", page.get("content") or "")
-            text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
+            text = visible_text(page.get("content"))
             low = text.lower()
             # visible text only, whole words only: "tci" must not match inside "WTci8Xn" in a script blob
             if all(re.search(r"(?<![a-z0-9])" + re.escape(t.lower()) + r"(?![a-z0-9])", low) for t in must_terms):
@@ -267,6 +282,25 @@ class Job:
             else:
                 possible.append({"terms": c["terms"], "reason": "search result names both, but the article could not be retrieved to confirm"})
         return {"query": query, "hits": hits, "possible": possible, "namesakes_cleared": namesakes, "meta": meta}
+
+    def read_website(self, w, legal):
+        """Jev reads the fetched page; the page stays the source. Returns {} when Jev is unavailable."""
+        text = (website_text(self.id)[0] or w["text"])[:6000]
+        sents = jev.sentences(text, limit=60)
+        qs = {
+            "parked": {"type": "noul", "instructions": "Is `page` a parked domain, a domain-for-sale page, a hosting placeholder, an under-construction page or an empty template, rather than the website of an operating business?"},
+            "names": {"type": "noul", "instructions": "Does `page` read as the website of the company named in `company`, or of a brand that the page presents as that company's?"},
+            "quote": jev.quote_question("Which sentence of the page most directly names the company in `company` or presents the page as its website?", sents),
+        }
+        try:
+            a, meta = jev.ask(self.id, {"company": legal, "title": w.get("title") or "", "page": jev.redact(text)}, qs)
+        except jev.Unavailable as e:
+            self.decisions.append({"about": "website", "unavailable": f"jev unavailable ({e}); fell back to rule"})
+            return {}
+        ev = {"parked": jev.evidence(meta, "parked or placeholder page?", a["parked"]),
+              "names": jev.evidence(meta, f"reads as the website of {legal}?", a["names"])}
+        self.decisions += [{"about": "website", **e} for e in ev.values()]
+        return {"parked": jev.yes(a["parked"]), "names": jev.yes(a["names"]), "quote": jev.quoted(a["quote"], sents, text), "ev": ev}
 
     def screening_metrics(self):
         found = cleared = escalated = 0
@@ -409,13 +443,23 @@ class Job:
             if not w["ok"] or len(w["text"]) < 200:
                 self.flag("amber", f"Website {url} did not load or has almost no content", wsrc)
             else:
+                # rules decide; Jev can add a flag or the sentence to quote, never remove a flag
                 toks = norm_tokens(legal)
-                if toks and any(t in (w["title"] or "").lower() + w["text"][:5000].lower() for t in toks):
-                    self.fact("Website is live and names the company", f"title: {w['title']}", wsrc)
+                named = bool(toks) and any(t in (w["title"] or "").lower() + w["text"][:5000].lower() for t in toks)
+                j = self.read_website(w, legal)
+                said = {**wsrc, "field": "page text", "passage": j["quote"]} if j.get("quote") else wsrc
+                if named and j.get("names") is False:
+                    self.flag("amber", f"Website {url} uses the name, but does not read as the site of {legal}; a person should check whose site it is",
+                              {**said, "decided_by": j["ev"]["names"]})
+                elif named:
+                    self.fact("Website is live and names the company", f"title: {w['title']}", {**said, "decided_by": j["ev"]["names"]} if j else wsrc)
                 else:
-                    self.flag("amber", f"Website {url} is live but does not mention '{legal}'", wsrc)
+                    hint = f" (Jev reads it as the company's site: \u201c{j['quote']}\u201d; a person should confirm)" if j.get("names") and j.get("quote") else ""
+                    self.flag("amber", f"Website {url} is live but does not mention '{legal}'{hint}", wsrc)
                 if re.search(r"domain (is )?for sale|buy this domain|parked", w["text"][:3000], re.I):
                     self.flag("red", "Website looks parked / for sale", wsrc)
+                elif j.get("parked"):
+                    self.flag("red", "Website reads as a parked, for-sale or placeholder page, not an operating business", {**wsrc, "decided_by": j["ev"]["parked"]})
 
         # ---- registry IDs
         reg = self.step("registry", lambda: self.s_registry(legal))
@@ -508,9 +552,10 @@ class Job:
             "flags": self.flags,
             "cannot_verify": self.missing,
             "screening": self.screening_metrics(),
+            "decisions": self.decisions,
             "approval": {"required_for": "adding the vendor to the approved vendor master", "action": action} if action else None,
             "cost": {"credits": led["total_credits"], "inr": round(led["total_credits"] * CONFIG["inr_per_credit"], 2),
-                     "paid_calls": led["paid_calls"], "cache_hits": led["cache_hits"]},
+                     "paid_calls": led["paid_calls"], "cache_hits": led["cache_hits"], "jev_calls": led["jev_calls"]},
             "elapsed_s": round(time.time() - self.t0, 1),
             "finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }

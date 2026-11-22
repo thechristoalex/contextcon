@@ -7,11 +7,14 @@ API
   POST /api/upload {name, text}   drop a new document into the inbox and process it
   POST /api/approve {key, by}     approve a payment (irreversible step), then pay once
   POST /api/recheck {key}         replay checks on a held invoice
+  POST /api/scan {image}          photo of a paper bill (data URL or base64): read on this machine, then checked
+  GET  /api/scan/<photo>          the stored photo, for the case view
   GET  /api/payments              simulated payment ledger
   GET  /api/events                activity log
   POST /cases {vendor_name, website, director}   vendor check on its own (5.1 + 5.2)
   GET  /cases/<id>
 """
+import base64
 import json
 import os
 import threading
@@ -125,7 +128,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/me":
             return self._json(self._user())
         if p == "/api/settings":
-            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit") if k in CONFIG})
+            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit", "jev_enabled", "jev_model", "jev_yes", "jev_no", "jev_choice_min", "jev_score_min", "min_read_confidence") if k in CONFIG})
         if p.startswith("/static/"):
             name = os.path.basename(p)
             fp = os.path.join(os.path.dirname(__file__), "static", name)
@@ -149,9 +152,20 @@ class H(BaseHTTPRequestHandler):
             v = ap.vendors().get(r["vendor_id"]) if r["vendor_id"] else None
             pay = store.db().execute("SELECT * FROM payments WHERE idempotency_key=?", (key,)).fetchone()
             ev = [dict(e) for e in store.db().execute(
-                "SELECT * FROM events WHERE job_id IN (?,?,?) ORDER BY id", (f"inv:{os.path.basename(r['source_file'])}", f"inv:{key}", f"trust:{r['vendor_id']}"))]
+                "SELECT * FROM events WHERE job_id IN (?,?,?) ORDER BY id", (f"inv:{os.path.basename(r['source_file'])}", f"inv:{key}", ap.trust_job_id(v) if v else ""))]
             return self._json({"invoice": dict(r), "decision": json.loads(r["decision_json"] or "{}"), "extracted": json.loads(r["extracted_json"]),
                                "vendor": v, "payment": dict(pay) if pay else None, "events": ev})
+        if p.startswith("/api/scan/"):
+            from . import scan
+            fp = scan.photo_path(urllib.parse.unquote(p[len("/api/scan/"):]))
+            if not fp or not os.path.isfile(fp):
+                return self._json({"error": "not found"}, 404)
+            b = open(fp, "rb").read()
+            self.send_response(200)
+            self.send_header("content-type", {".png": "image/png", ".heic": "image/heic"}.get(os.path.splitext(fp)[1], "image/jpeg"))
+            self.send_header("content-length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if p == "/api/bank":
             from . import bank
             store.db().execute(bank.SCHEMA)
@@ -163,7 +177,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/vendors":
             out = []
             for v in ap.vendors().values():
-                j = store.get_job(f"trust:{v['vendor_id']}")
+                j = store.get_job(ap.trust_job_id(v))
                 out.append({**v, "trust": j["verdict"] if j else None})
             return self._json(out)
         if p.startswith("/cases/"):
@@ -179,9 +193,14 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "sign in required"}, 401)
         try:
             if p == "/api/settings":
-                for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount"):
+                for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "min_read_confidence"):
                     if k in b:
                         CONFIG[k] = float(b[k])
+                for k in ("jev_yes", "jev_no", "jev_choice_min", "jev_score_min"):
+                    if k in b:
+                        CONFIG[k] = min(1.0, max(0.0, float(b[k])))
+                if "jev_enabled" in b:
+                    CONFIG["jev_enabled"] = str(b["jev_enabled"]).strip().lower() in ("1", "true", "yes", "on")
                 store.log(None, f"settings changed by {user.get('email') or 'local'}: {b}")
                 return self._json({"ok": True})
             if p == "/api/process":
@@ -211,6 +230,14 @@ class H(BaseHTTPRequestHandler):
                     f.write(b["csv"])
                 with _busy:
                     return self._json(bank.post_file(path))
+            if p == "/api/scan":
+                from . import scan
+                try:
+                    data = base64.b64decode((b.get("image") or "").split(",", 1)[-1])
+                    with _busy:
+                        return self._json(scan.scan_bytes(data))
+                except (scan.ScanError, ValueError) as e:
+                    return self._json({"error": str(e)}, 400)
             if p == "/api/recheck":
                 with _busy:
                     return self._json(ap.recheck(b["key"]))
@@ -227,6 +254,8 @@ def serve(port=8080):
     done = ap.resume()  # crash recovery: pay anything approved but unpaid, exactly once
     if done:
         print(f"resumed {len(done)} approved payment(s)")
+    from . import scan
+    threading.Thread(target=scan.warm, daemon=True).start()  # load the bill reader before the first scan
     srv = ThreadingHTTPServer(("127.0.0.1", port), H)
     print(f"Vendor Trust + Payables Desk on http://127.0.0.1:{port}")
     srv.serve_forever()

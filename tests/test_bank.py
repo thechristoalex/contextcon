@@ -8,6 +8,10 @@ import tempfile
 import time
 import unittest
 
+try:
+    from . import offline  # noqa: F401  (python -m unittest tests.x)
+except ImportError:
+    import offline  # noqa: F401  (python -m unittest discover tests)
 from vendorcheck import bank, crust, store
 
 FIX = os.path.join(os.path.dirname(__file__), "..", "data", "fixtures")

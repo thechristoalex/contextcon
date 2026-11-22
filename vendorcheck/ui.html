@@ -7,6 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css?v=3">
+<style>
+#cam{width:100%;max-width:640px;display:block;background:#000;border-radius:6px}
+.scanph{position:relative;align-self:start}.scanph img{width:100%;display:block;border-radius:4px}
+.scanph i{position:absolute;outline:2px solid #384ce3;background:rgba(56,76,227,.14);border-radius:2px}
+.scangrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px}
+@media (max-width:800px){.scangrid{grid-template-columns:1fr}}
+</style>
 </head>
 <body>
 <div class="shell">
@@ -98,7 +105,10 @@ function drawNav(){const waiting=INV.filter(r=>r.state==='awaiting_approval').le
   $$('#nav a').forEach(a=>a.onclick=()=>go(a.dataset.r))}
 function topbar(title,{crumb,acts=''}={}){TOP.innerHTML=(crumb?`<div class="crumb">${crumb}<span>/</span></div>`:'')+`<h1>${title}</h1><div class="acts">${acts}</div>`}
 async function refreshInv(){INV=await api('/api/invoices');drawNav()}
-async function go(id,arg){ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
+let CAM=null;
+const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
+const blobUrl=async p=>{const h={};if(TOKEN)h.authorization='Bearer '+TOKEN;const r=await fetch(p,{headers:h});return URL.createObjectURL(await r.blob())};
+async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
   try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){if(e.message!=='signed out'){V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
@@ -125,19 +135,37 @@ async function dash(){
 
 let FILTER='all', Q='', SEL=0;
 async function inbox(){
-  topbar('Inbox',{acts:`<button class="btn" id="drop">Add document</button><button class="btn primary" id="proc">Process inbox</button>`});
+  topbar('Inbox',{acts:`<button class="btn" id="scanbtn">Scan a bill</button><button class="btn" id="drop">Add document</button><button class="btn primary" id="proc">Process inbox</button>`});
   V.innerHTML=skel();await refreshInv();
   const F={all:['All',()=>true],awaiting_approval:['Needs approval',r=>r.state==='awaiting_approval'],held:['Held',r=>r.state==='held'],paid:['Paid',r=>r.state==='paid'],duplicate:['Duplicate',r=>r.state==='duplicate']};
   const draw=()=>{const rows=INV.filter(F[FILTER][1]).filter(r=>!Q||JSON.stringify(r).toLowerCase().includes(Q));SEL=Math.min(SEL,Math.max(0,rows.length-1));
     $('#tb').innerHTML=rows.map((r,i)=>`<tr class="click rowin ${i===SEL?'sel':''}" style="animation-delay:${i*20}ms" data-k="${esc(r.invoice_key)}"><td>${st(r.state)}</td><td class="mono">${esc(r.invoice_no||nice(r.doc_type))}</td><td>${esc(r.vendor_id||'—')}</td><td class="r mono num">${inr(r.amount_inr)}</td><td class="r mono num f3">${r.risk_score??''}</td><td class="f2" title="${esc(r.reason)}">${esc(r.reason||'')}</td><td class="f3 r">${ago(r.updated_at)}</td></tr>`).join('')||`<tr><td colspan="7"><div class="empty"><b>No documents here</b>Change the filter or process the inbox.</div></td></tr>`;
     $$('#tb tr[data-k]').forEach((tr,i)=>{tr.onclick=()=>go('case',tr.dataset.k);tr.onmouseenter=()=>{SEL=i;$$('#tb tr').forEach((x,j)=>x.classList.toggle('sel',j===i))}})};
-  V.innerHTML=`<div id="dz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Add an invoice or email</span></div><div style="padding:14px;display:grid;gap:8px"><input id="fname" placeholder="file name, e.g. 08_new_invoice.txt"><textarea id="txt" placeholder="Paste the invoice or email text"></textarea><div><button class="btn primary" id="send">Process document</button></div></div></div>
+  V.innerHTML=`<div id="sz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Scan a paper bill · read on this machine, the photo never leaves it</span></div>
+   <div style="padding:14px;display:grid;gap:10px"><video id="cam" autoplay playsinline muted></video>
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="cap" disabled>Capture</button>
+   <label class="btn" style="cursor:pointer">Upload / take photo<input id="pfile" type="file" accept="image/*" capture="environment" hidden></label>
+   <span class="f3" id="smsg">Hold the whole bill flat in frame, in good light.</span></div></div></div>
+   <div id="dz" style="display:none;margin-bottom:14px" class="box"><div class="hd"><span class="lbl">Add an invoice or email</span></div><div style="padding:14px;display:grid;gap:8px"><input id="fname" placeholder="file name, e.g. 08_new_invoice.txt"><textarea id="txt" placeholder="Paste the invoice or email text"></textarea><div><button class="btn primary" id="send">Process document</button></div></div></div>
    <div class="chips">${Object.entries(F).map(([k,[l,f]])=>`<button class="chip ${FILTER===k?'on':''}" data-f="${k}">${l}<b>${INV.filter(f).length}</b></button>`).join('')}<input class="search" id="q" placeholder="Filter…" value="${esc(Q)}"></div>
    <div class="tblwrap"><table class="tbl"><thead><tr><th>Status</th><th>Invoice</th><th>Vendor</th><th class="r">Amount</th><th class="r">Risk</th><th>Reason</th><th class="r">Updated</th></tr></thead><tbody id="tb"></tbody></table></div>
    <div class="f3" style="margin-top:10px"><span class="kbd">j</span> <span class="kbd">k</span> move · <span class="kbd">Enter</span> open · <span class="kbd">/</span> filter · <span class="kbd">⌘K</span> jump</div>`;
   draw();
   $$('[data-f]').forEach(b=>b.onclick=()=>{FILTER=b.dataset.f;SEL=0;$$('[data-f]').forEach(x=>x.classList.toggle('on',x===b));draw()});
   $('#q').oninput=e=>{Q=e.target.value.toLowerCase();SEL=0;draw()};
+  const sendPhoto=async src=>{const w0=src.videoWidth||src.naturalWidth,h0=src.videoHeight||src.naturalHeight,k=Math.min(1,2000/Math.max(w0,h0));
+    const c=document.createElement('canvas');c.width=Math.round(w0*k);c.height=Math.round(h0*k);c.getContext('2d').drawImage(src,0,0,c.width,c.height);
+    await busy($('#cap'),'Reading…',async()=>{$('#smsg').textContent='Reading the bill and running the checks…';
+      const r=await api('/api/scan',{image:c.toDataURL('image/jpeg',0.9)});
+      toast(`${esc(r.invoice_key)}: ${esc(LBL[r.state]||r.state||r.outcome||'already processed')}`);go('case',r.invoice_key)});
+    $('#smsg').textContent='Hold the whole bill flat in frame, in good light.'};
+  $('#scanbtn').onclick=async()=>{const z=$('#sz');if(z.style.display!=='none'){z.style.display='none';stopCam();return}z.style.display='block';
+    if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){$('#cam').style.display='none';$('#smsg').textContent='Live camera needs this page on localhost or https: use Upload / take photo.';return}
+    try{CAM=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}});$('#cam').srcObject=CAM;$('#cap').disabled=false}
+    catch(e){$('#cam').style.display='none';$('#smsg').textContent='Camera not available ('+e.name+'): use Upload / take photo.'}};
+  $('#cap').onclick=()=>sendPhoto($('#cam'));
+  $('#pfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.src=URL.createObjectURL(f);
+    try{await img.decode()}catch(_){toast('Could not open that file as a picture: use JPG or PNG','err');return}sendPhoto(img)};
   $('#drop').onclick=()=>{const z=$('#dz');z.style.display=z.style.display==='none'?'block':'none';$('#txt').focus()};
   $('#send').onclick=e=>busy(e.currentTarget,'Checking…',async()=>{const r=await api('/api/upload',{name:$('#fname').value||('upload_'+Date.now()+'.txt'),text:$('#txt').value});toast(`${esc(r.invoice_key||'Document')}: ${esc(LBL[r.state]||r.state||r.outcome)}`);go('case',r.invoice_key)});
   $('#proc').onclick=e=>busy(e.currentTarget,'Processing…',async()=>{const r=await api('/api/process',{});toast(`Processed ${r.length} document${r.length===1?'':'s'}`);inbox()});
@@ -167,6 +195,9 @@ async function caseView(key){
       ${t.flags.map(f=>`<div class="chk"><div style="display:flex;gap:10px"><span>${ICON[f.severity==='red'?'fail':'warn']}</span><span>${esc(f.reason)}${src(f.source)}</span></div></div>`).join('')}
       ${t.cannot_verify.map(m=>`<div class="chk"><div style="display:flex;gap:10px"><span>${ICON.none}</span><span class="f2">Cannot verify: ${esc(m)}</span></div></div>`).join('')}`:''}
     ${d.draft_message?`<div class="sec"><span class="lbl">Drafted message · not sent</span></div><div class="draft"><div class="f2">To <b>${esc(d.draft_message.to)}</b> · call back <span class="mono">${esc(d.draft_message.phone_to_call_back||'—')}</span></div><pre>${esc(d.draft_message.subject+'\n\n'+d.draft_message.body)}</pre><div class="f3" style="margin-top:8px">${esc(d.draft_message.note)}</div><div style="margin-top:10px"><span class="btn sm" data-copy="${esc(d.draft_message.subject+'\n\n'+d.draft_message.body)}">Copy draft</span></div></div>`:''}
+    ${x.scan?`<div class="sec"><span class="lbl">Scanned bill</span><span class="f3">read by ${esc(nice(x.scan.reader))} on this machine in ${x.scan.read_ms} ms · ₹0 · <span class="mono">${esc(x.scan.photo)}</span></span></div>
+    <div class="scangrid"><div class="scanph"><img id="ph" alt="Photo of the bill">${Object.entries(x.scan.fields).map(([k,f])=>f.boxes.map(b=>`<i title="${esc(nice(k))}" style="left:${b[0]*100}%;top:${b[1]*100}%;width:${b[2]*100}%;height:${b[3]*100}%"></i>`).join('')).join('')}</div>
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Field</th><th>Read as</th><th>From the photo</th></tr></thead><tbody>${Object.entries(x.scan.fields).map(([k,f])=>`<tr><td>${esc(nice(k))}</td><td class="mono">${esc(x[k])}</td><td class="f2">row ${f.row} · confidence <b class="${f.conf<0.5?'warn':'pass'}">${f.conf.toFixed(2)}</b><div class="f3">“${esc(f.text)}”</div></td></tr>`).join('')}</tbody></table></div></div>`:''}
     <div class="sec"><span class="lbl">Audit trail</span></div>
     <div class="feed" style="padding:0">${c.events.map(e=>`<div class="ev"><span class="f3 mono" style="font-size:11px">${new Date(e.at*1000).toLocaleTimeString('en-IN')}</span><span class="f2">${esc(e.msg)}</span></div>`).join('')}</div>
   </div>
@@ -189,6 +220,7 @@ async function caseView(key){
     <div class="prop"><span class="k">Key</span><span class="v mono"><span class="copy" data-copy="${esc(key)}" title="Idempotency key: copy">${esc(key)}</span></span></div>
   </aside></div>`;
   bindCopy(V);
+  if(x.scan)blobUrl('/api/scan/'+encodeURIComponent(x.scan.photo)).then(u=>{const i=$('#ph');if(i)i.src=u});
   if(can){const b=$('#hold');let tm=null;const label=`Hold to approve and pay ${inr(x.amount_inr)}`;
     const start=e=>{e.preventDefault();if(b.classList.contains('done'))return;b.classList.add('holding');$('#holdl').textContent='Keep holding…';
       tm=setTimeout(async()=>{b.classList.remove('holding');b.classList.add('done');$('#holdl').textContent='Approved · paying…';
@@ -269,7 +301,7 @@ async function activity(){
 
 async function settings(){
   topbar('Settings');const s=await api('/api/settings');
-  const f=[['max_credits_per_job','Cost limit per job','Crustdata credits. A job that reaches it stops and says cannot verify.'],['max_seconds_per_job','Time limit per job','Seconds.'],['auto_approve_below_inr','Auto-approve payments below','₹. 0 means every payment needs a person.'],['min_age_years','Flag companies younger than','Years.'],['min_headcount','Flag headcount below','People.']];
+  const f=[['max_credits_per_job','Cost limit per job','Crustdata credits. A job that reaches it stops and says cannot verify.'],['max_seconds_per_job','Time limit per job','Seconds.'],['auto_approve_below_inr','Auto-approve payments below','₹. 0 means every payment needs a person.'],['min_age_years','Flag companies younger than','Years.'],['min_headcount','Flag headcount below','People.'],['min_read_confidence','Hold a scanned bill when a field is read below','Confidence, 0 to 1. A person compares that field with the photo.']];
   V.innerHTML=`<p class="f2" style="margin:0 0 16px">Limits and approval policy for every run. Changes apply to the next job and are logged with your identity.</p>
   <div style="max-width:640px">${f.map(([k,l,d])=>`<div class="field"><div><div class="h">${l}</div><div class="d">${d}</div></div><input id="s_${k}" class="num" value="${esc(s[k])}"></div>`).join('')}
   <div style="margin-top:16px"><button class="btn primary" id="save">Save settings</button></div></div>`;
