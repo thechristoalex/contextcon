@@ -36,6 +36,8 @@ _compile_lock = threading.Lock()
 # the rupee sign is often read as a look-alike currency sign; only fixed directly before a number
 _SIGNS = "".join(c for c in map(chr, range(0x20, 0x20D0)) if unicodedata.category(c) == "Sc" and c != "₹")
 RUPEE_MISREAD = re.compile("[" + re.escape(_SIGNS) + r"](?=\s?\d)")
+# ...or as a bare letter R glued to an Indian-grouped amount (R1,58,400.00); the grouping keeps codes like R123 untouched
+RUPEE_AS_R = re.compile(r"(?<![A-Za-z0-9])R(?=\d{1,3}(?:,\d{2,3})+(?:\.\d{1,2})?\b)")
 
 
 class ScanError(ValueError):
@@ -150,7 +152,8 @@ def rows_from_lines(lines):
     rows = []
     for ln in sorted(lines, key=lambda l: l["box"][1] + l["box"][3] / 2):
         cy, h = ln["box"][1] + ln["box"][3] / 2, ln["box"][3]
-        if rows and abs(cy - rows[-1]["cy"]) < 0.6 * min(h, rows[-1]["h"]):
+        # 0.75 of a line height: a tilted photo puts a value up to ~70% of a line below its label; the next printed line is 1.2+ heights away
+        if rows and abs(cy - rows[-1]["cy"]) < 0.75 * min(h, rows[-1]["h"]):
             r = rows[-1]
             r["items"].append(ln)
             r["cy"] = sum(i["box"][1] + i["box"][3] / 2 for i in r["items"]) / len(r["items"])
@@ -160,7 +163,7 @@ def rows_from_lines(lines):
     for r in rows:
         items = sorted(r["items"], key=lambda l: l["box"][0])
         text = "  ".join(i["text"].strip() for i in items)
-        out.append({"text": RUPEE_MISREAD.sub("₹", text), "conf": min(i["conf"] for i in items),
+        out.append({"text": RUPEE_AS_R.sub("₹", RUPEE_MISREAD.sub("₹", text)), "conf": min(i["conf"] for i in items),
                     "boxes": [i["box"] for i in items]})
     return out
 

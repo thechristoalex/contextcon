@@ -96,6 +96,22 @@ class RowsTest(unittest.TestCase):
                  {"text": "Rs. 4,12,500.00", "conf": 1.0, "box": [0.75, 0.508, 0.2, 0.02]}]
         self.assertEqual([r["text"] for r in scan.rows_from_lines(lines)], ["Total:  Rs. 4,12,500.00"])
 
+    def test_tilted_total_and_its_value_stay_on_one_row(self):
+        # positions read from 03_tci_invoice after a browser re-encode: the value sits 0.0126 below its label
+        lines = [{"text": "996812", "conf": 1.0, "box": [0.5641, 0.2980, 0.0631, 0.0189]},
+                 {"text": "Grand Total:", "conf": 1.0, "box": [0.4635, 0.3500, 0.1124, 0.0178]},
+                 {"text": "₹1,58,400.00", "conf": 1.0, "box": [0.7803, 0.3596, 0.1178, 0.0237]}]
+        self.assertEqual([r["text"] for r in scan.rows_from_lines(lines)], ["996812", "Grand Total:  ₹1,58,400.00"])
+
+    def test_rupee_sign_misread_as_letter_r_is_fixed_only_before_a_grouped_amount(self):
+        # the browser re-encodes a photo before upload, and the reader then saw R1,58,400.00 instead of ₹1,58,400.00
+        row = lambda txt: scan.rows_from_lines([{"text": txt, "conf": 1.0, "box": [0.1, 0.5, 0.3, 0.02]}])[0]["text"]
+        self.assertEqual(row("Grand Total: R1,58,400.00"), "Grand Total: ₹1,58,400.00")
+        self.assertEqual(row("R2,36,000"), "₹2,36,000")
+        self.assertEqual(row("Ref R123"), "Ref R123")            # no grouping: a code, not money
+        self.assertEqual(row("TR1,500"), "TR1,500")              # R inside a word stays
+        self.assertEqual(ap.extract(row("Grand Total: R1,58,400.00"))["amount_inr"], 158400.0)
+
 
 class ExtractTest(unittest.TestCase):
     def test_vendor_and_account_name_stop_at_a_column_gap(self):
