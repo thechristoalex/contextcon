@@ -226,7 +226,10 @@ def gstin_problem(g):
 # ---------------- labels ----------------
 
 L = {
-    "invoice_no": r"(?:tax\s*)?invoice\s*(?:no|number|num|#)\.?|inv\.?\s*(?:no|#)\.?|bill\s*(?:no|number)\.?|voucher\s*no\.?",
+    # "Number :" alone (IndiGo / airline tax invoices) counts only as the whole label at the start of a line, so
+    # "Flight No", "Phone number" or "PO number" are never read as the invoice number
+    "invoice_no": r"(?:tax\s*)?invoice\s*(?:no|number|num|#)\.?|inv\.?\s*(?:no|#)\.?|bill\s*(?:no|number)\.?|voucher\s*no\.?"
+                  r"|(?:document|doc\.?)\s*(?:no|number)\.?|^\s*number(?=\s*[:\-])",
     "invoice_date": r"(?:invoice|inv\.?|bill)\s*date|date\s*of\s*(?:invoice|issue)|dated|date",
     "due_date": r"due\s*date|payment\s*due(?:\s*date)?",
     "ack_no": r"ack\.?\s*(?:no|number)\.?",
