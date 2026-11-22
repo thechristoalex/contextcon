@@ -10,6 +10,10 @@ import tempfile
 import time
 import unittest
 
+try:
+    from . import offline  # noqa: F401  (python -m unittest tests.x)
+except ImportError:
+    import offline  # noqa: F401  (python -m unittest discover tests)
 from vendorcheck import ap, crust, pipeline, store
 
 VERDICTS = {  # what the live vendor check returned for each fixture vendor on 22 Nov 2026

@@ -32,6 +32,16 @@ CONFIG = {
     # rupee value of 1 Crustdata credit, for the per-job cost in the report
     "auto_approve_below_inr": float(os.environ.get("AUTO_APPROVE_BELOW_INR", "0")),
     "inr_per_credit": float(os.environ.get("INR_PER_CREDIT", "25")),
+    # Jev (TypeSafe decision model). Pinned version: an alias like jev-latest can move and change a re-run's verdict.
+    "jev_enabled": os.environ.get("JEV_ENABLED", "1") == "1",
+    "jev_model": os.environ.get("JEV_MODEL", "jev-1.14.0"),
+    "jev_yes": 0.80,          # yes/no answer at or above this reads as yes
+    "jev_no": 0.20,           # at or below this reads as no; in between is "cannot tell", never "medium"
+    "jev_choice_min": 0.80,   # a choice counts only at this confidence
+    "jev_score_min": 0.70,    # a score level counts only if its own probability clears this
+    "jev_quote_min": 0.50,    # pointing at a sentence to quote (code checks the quote is really in the text)
+    "jev_timeout_s": 20,
+    "jev_retries": 2,
 }
 
 ADVERSE_TERMS = [

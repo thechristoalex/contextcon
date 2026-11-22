@@ -94,3 +94,6 @@ textarea{width:100%;min-height:160px;font-family:var(--mono);font-size:12px}
 }
 @media print{header,.toolbar,.btn,.actions{display:none!important}.console{background:#fff;color:#000;border:1px solid #000}.console .lbl{color:#555}
   main:before{content:"Payables Desk · Case file";display:block;font-family:var(--display);font-size:28px;margin-bottom:16px}}
+
+.info{color:var(--quiet)}
+.jevtag{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;line-height:1.5;padding:0 6px;margin-right:6px;border:1px solid var(--blue);color:var(--blue);border-radius:3px}
