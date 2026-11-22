@@ -39,3 +39,48 @@ Ties: end-to-end, then facts.
 
 ## Submission form
 Team (Humble Fumblers), one-liner, theme, public GitHub URL, 2-min demo video (Loom/unlisted YT/public Drive), how it works, diagram URL, anything written before 10:15, member details.
+
+## Our tracks: exact dashboard briefs (scraped 22 Nov, ~2:30 PM)
+**5. Trust and compliance:** "Decide who to trust." Paid today: verification and screening firms, paid per business or person checked for a bank, payment firm or large buyer.
+- 5.1 Vendor Check: prove a new vendor is real, active and run by its director. 5.2 Adverse Media Screen: screen directors against the news and clear namesakes.
+- What judges look for: *fronts caught with evidence, while honest firms and innocent namesakes pass.*
+- Sample request: "Here is a new vendor's name and website. Tell me whether it is a real, trading business: who runs it, how long it has existed, and anything that looks off."
+
+**6. Buying and paying:** "An agent you can hand the books." Paid today: outsourced accounting firms that run a company's payables and close its books each month.
+- 6.1 Payables Desk: pay each invoice once, through crashes and bank-detail fraud.
+- What judges look for: *books an auditor can replay line by line, with no rupee paid twice or to the wrong account.*
+- Sample request: "Here are this week's invoices from our accounts inbox. Match each one to its purchase order, check the vendor and its bank account, pay each one once, and hold anything unusual for my approval with the reason."
+
+## "What every service does" (dashboard guide, in addition to the PDF)
+- A source timeout must lead to a retry or a hold for a person. **Never read a source's silence as an answer.**
+- The cost ledger must include **model calls as well as Crustdata calls**.
+- "Rejecting an applicant" and "placing an order" also count as irreversible and need approval.
+- Example citation from the dashboard: payee Swiggy Limited, from the company-name field of its MCA record, retrieved on 9 Oct 2026. Dashboard example lines: SWIGGY BANGALORE; GOOGLE CLOUD x2 (duplicate, so hold); UPI SHARMA TRADERS (cannot verify, because many businesses trade under that name; hold).
+- Suggested pace: one request running end to end by 1:00 PM; README and video done by 5:30 PM.
+
+## Crustdata error codes (dashboard)
+- 401: bad key.
+- **402: credits exhausted. Don't retry; check with `GET /account/credits` (free).**
+- 403: endpoint not on the plan.
+- 429: wait the number of seconds in `x-ratelimit-reset`, then retry.
+- No results: loosen filters and check exact values with autocomplete.
+
+## Finals: what the judges want to hear (2-minute demo)
+1. The service, who pays for it today, and why you picked it.
+2. The business case: buyer, **price in ₹**, cost to run one job.
+3. The approaches you considered and why you chose yours.
+4. What worked and what didn't.
+5. The hardest case and how the product handles it.
+6. How you tested it and how you know it works.
+7. What you left out to ship in 7h45m.
+8. What comes next, and why now isn't the time.
+- If possible, show more than the prepared request: a duplicate record, a changed fact, a failing call, a restart mid-run. Expect a scale question (100× volume, or a second client).
+- Open with the request in the customer's words and let it run to the end. If anything breaks, play the demo video.
+- **The 10 finalists are picked from the submissions, so the demo video matters a great deal.**
+
+## README sections required by the submission form
+The service (who does it today, who pays) · What it does now (and where it still needs a person) · What it could do in the future · The future of this service · How to run it from a fresh clone · How it's built (agents, models, tools, data, where Crustdata is called, where state lives) · Its sources and checks (each data source, approval points, cost ledger) · The approaches you tried.
+Form also asks: one-liner, theme, public repo, 2-min video link (Loom, unlisted YouTube, or public Drive file, **not a folder**), "how does it work", public diagram link, anything written before 10:15, and each member's name, BITS email, YC email, BITS ID, personal email and GitHub username.
+
+## Prizes
+$8k / $3k / $1k in Crustdata credits. The top 3 get office hours with Jon Xu (YC GP). Crustdata PPIs for standout builders. People's Choice voting runs until 8:30 PM.
