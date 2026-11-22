@@ -129,13 +129,19 @@ Offline tests (no key, no credits): `python3 -m unittest tests.test_procure -v`.
 
 | Diagram | Public link |
 |---|---|
+| **System architecture, typeset in LaTeX/TikZ (use this in the form)** | https://github.com/thechristoalex/contextcon/blob/main/docs/system-latex.png ([PDF](https://github.com/thechristoalex/contextcon/blob/main/docs/latex/system.pdf), [source](https://github.com/thechristoalex/contextcon/blob/main/docs/latex/system.tex)) |
+| **Invoice state machine, LaTeX/TikZ** | https://github.com/thechristoalex/contextcon/blob/main/docs/statemachine-latex.png ([PDF](https://github.com/thechristoalex/contextcon/blob/main/docs/latex/statemachine.pdf)) |
 | System architecture (components, data stores, external calls) | https://github.com/thechristoalex/contextcon/blob/main/docs/system-context.png |
 | Agent flow (invoice and bank-line paths, checks, approval, pay once) | https://github.com/thechristoalex/contextcon/blob/main/docs/agent-flow.png |
 | Invoice state machine (exactly-once payment) | https://github.com/thechristoalex/contextcon/blob/main/docs/invoice-state-machine.png |
 | Vendor check pipeline (5.1 + 5.2) | https://github.com/thechristoalex/contextcon/blob/main/docs/vendor-check.png |
 | Business value chain | https://github.com/thechristoalex/contextcon/blob/main/docs/value-chain.png |
 
-![System architecture](docs/system-context.png)
+![System architecture](docs/system-latex.png)
+
+![Invoice state machine](docs/statemachine-latex.png)
+
+Rebuild the figures with `cd docs/latex && tectonic system.tex && tectonic statemachine.tex`.
 
 ## How it works
 
