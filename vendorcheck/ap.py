@@ -391,7 +391,7 @@ def check_unknown_vendor(x):
     if legal and x.get("account_name"):
         aev = [{"source": "invoice", "field": "account name", "value": x["account_name"]}, {"source": "background check", "field": "legal name", "value": legal}]
         if pipeline.norm_tokens(x["account_name"]) == pipeline.norm_tokens(legal):
-            out.append(chk("account_name", "pass", f"Bank account is in the name of {legal}, the company the background check found", aev))
+            out.append(chk("account_name", "pass", f"Bank account name '{x['account_name']}' matches {legal}, the company the background check found", aev))
         else:
             out.append(chk("account_name", "warn", f"Bank account name '{x['account_name']}' is not {legal}, the company the background check found", aev, weight=15))
     return out, rep

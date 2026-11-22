@@ -130,6 +130,14 @@ def website_text(job_id):
     return (visible_text(rows[0].get("content")) if rows else w.get("text")), w.get("url")
 
 
+def www_variant(url):
+    """https://x.com -> https://www.x.com and back; same host, so the same domain."""
+    p = urllib.parse.urlparse(url)
+    host = p.hostname or ""
+    other = host[4:] if host.startswith("www.") else "www." + host
+    return p._replace(netloc=p.netloc.replace(host, other, 1)).geturl()
+
+
 def is_redirect(url):
     return bool(url) and ("google.com/goto" in url or "google.com/url?" in url)
 
@@ -236,10 +244,19 @@ class Job:
 
     # ---------- step 3: website ----------
     def s_website(self, url):
-        resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": [url]})
-        page = first_list(resp)[0] if first_list(resp) else {}
-        text = visible_text(page.get("content"))
-        return {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or url, "meta": meta}
+        """Fetch the site. If it fails, try the same host with or without www once: many sites only hold a
+        certificate for one of the two (delhivery.com fails with ERR_CERT_COMMON_NAME_INVALID, www.delhivery.com loads).
+        Never a different domain, so the check stays about the domain that was given."""
+        tried = []
+        for u in [url] + [www_variant(url)]:
+            resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": [u]})
+            page = first_list(resp)[0] if first_list(resp) else {}
+            text = visible_text(page.get("content"))
+            out = {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or u, "meta": meta}
+            if out["ok"] and len(text) >= 200:
+                return {**out, "tried": tried}
+            tried.append({"url": u, "error": page.get("message") or page.get("error") or ("almost no text" if out["ok"] else "no response")})
+        return {**out, "tried": tried}
 
     # ---------- step 4: registry identifiers from the web ----------
     # ---------- page verification: never cite a search snippet or a redirect ----------
@@ -478,7 +495,8 @@ class Job:
             w = self.step("website", lambda: self.s_website(url))
             wsrc = crust.source_ref(w["meta"], "page title / text", url=w["url"])
             if not w["ok"] or len(w["text"]) < 200:
-                self.flag("amber", f"Website {url} did not load or has almost no content", wsrc)
+                why = "; ".join(f"{t['url']}: {t['error']}" for t in w.get("tried", [])) or "no content"
+                self.flag("amber", f"Website {url} did not load or has almost no content ({why})", wsrc)
             else:
                 # rules decide; Jev can add a flag or the sentence to quote, never remove a flag
                 toks = norm_tokens(legal)

@@ -221,3 +221,47 @@ class UnknownVendorTest(PatchedCheck):
         d = json.loads(next(i["decision_json"] for i in ap.invoices()))
         self.assertEqual({c["check"]: c["result"] for c in d["checks"]}["background_check"], "warn")
         self.assertEqual(len(fake.calls), 2)
+
+
+class WebsiteFetchTest(TempStore):
+    """delhivery.com only has a certificate for www.delhivery.com: a live site must not be flagged as dead."""
+
+    def fetch(self, pages):
+        calls = []
+
+        def fake(job_id, endpoint, body, use_cache=True):
+            u = body["urls"][0]
+            calls.append(u)
+            page = pages.get(u, {"success": False, "error": "INVALID_URL", "message": "URL navigation failed: net::ERR_NAME_NOT_RESOLVED"})
+            return [page], {"retrieved_at": time.time(), "cache_hit": False, "endpoint": endpoint, "req_hash": u}
+        real = crust.call
+        crust.call = fake
+        try:
+            return pipeline.Job({"vendor_name": "Delhivery Limited", "request_id": "t-web"}).s_website("https://delhivery.com"), calls
+        finally:
+            crust.call = real
+
+    def test_www_variant(self):
+        self.assertEqual(pipeline.www_variant("https://delhivery.com"), "https://www.delhivery.com")
+        self.assertEqual(pipeline.www_variant("https://www.delhivery.com/about"), "https://delhivery.com/about")
+
+    def test_bare_domain_cert_error_falls_back_to_www(self):
+        live = {"success": True, "title": "Delhivery", "content": "<p>" + "Delhivery logistics and supply chain services. " * 10 + "</p>"}
+        w, calls = self.fetch({"https://delhivery.com": {"success": False, "message": "URL navigation failed: net::ERR_CERT_COMMON_NAME_INVALID"},
+                               "https://www.delhivery.com": live})
+        self.assertEqual(calls, ["https://delhivery.com", "https://www.delhivery.com"])
+        self.assertTrue(w["ok"])
+        self.assertEqual(w["url"], "https://www.delhivery.com")
+        self.assertIn("ERR_CERT_COMMON_NAME_INVALID", w["tried"][0]["error"])
+
+    def test_live_site_is_fetched_once(self):
+        live = {"success": True, "title": "Delhivery", "content": "<p>" + "Delhivery logistics. " * 20 + "</p>"}
+        w, calls = self.fetch({"https://delhivery.com": live})
+        self.assertEqual(calls, ["https://delhivery.com"])       # no extra paid call when the first one works
+        self.assertEqual(w["tried"], [])
+
+    def test_both_fail_records_why(self):
+        w, calls = self.fetch({})
+        self.assertFalse(w["ok"])
+        self.assertEqual(len(w["tried"]), 2)
+        self.assertIn("ERR_NAME_NOT_RESOLVED", w["tried"][1]["error"])
