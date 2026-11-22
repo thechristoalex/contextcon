@@ -40,8 +40,7 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(44px,6.4vw,76px);l
 .cta{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 .proof{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:28px;color:var(--f3);font:500 12px var(--mono);text-transform:uppercase;letter-spacing:.04em}
 .proof b{color:var(--fg);font-weight:500}
-.stage{margin:44px auto 0;max-width:1080px;background:var(--sub);border:1px solid var(--line);border-radius:12px;padding:20px;position:relative}
-.stage:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:90px;border-radius:0 0 12px 12px;background:linear-gradient(to bottom,rgba(255,255,255,0),var(--bg));pointer-events:none}
+.stage{margin:44px auto 0;max-width:1080px;background:var(--sub);border:1px solid var(--line);border-radius:12px;padding:20px;position:relative;-webkit-mask-image:linear-gradient(to bottom,#000 0%,#000 80%,rgba(0,0,0,.45) 93%,transparent 100%);mask-image:linear-gradient(to bottom,#000 0%,#000 80%,rgba(0,0,0,.45) 93%,transparent 100%)}
 .tabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
 .tab{position:relative;overflow:hidden;height:32px;padding:0 14px;border-radius:16px;border:1px solid var(--line2);background:var(--bg);font:500 13px var(--sans);color:var(--f2);cursor:pointer;transition:color .15s,border-color .15s}
 .tab:hover{color:var(--fg);border-color:var(--f3)}
@@ -84,7 +83,7 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(44px,6.4vw,76px);l
 .kv{display:grid;grid-template-columns:84px 1fr;gap:6px;padding:5px 0;border-bottom:1px solid var(--line)}
 .kv span:first-child{color:var(--f3)}.kv span:last-child{font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .meter{height:4px;border-radius:2px;background:var(--line);margin:10px 0 4px;overflow:hidden}.meter i{display:block;height:100%;width:0;transition:width .6s var(--ease),background .3s}
-.cap{font:500 11px var(--mono);color:var(--f3);text-transform:uppercase;letter-spacing:.05em;text-align:center;margin-top:14px;position:relative;z-index:2}
+.cap{font:500 11px var(--mono);color:var(--f3);text-transform:uppercase;letter-spacing:.05em;text-align:center;margin-top:-28px;position:relative;z-index:2}
 .sec{padding:72px 0 24px}
 .sec h2{font-family:var(--display);font-weight:400;font-size:clamp(34px,4.2vw,48px);line-height:1.08;margin:0 0 28px;max-width:760px}
 .lbl{font:500 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--blue);margin-bottom:10px}
@@ -139,8 +138,8 @@ footer .wrap{display:flex;gap:20px;height:56px;align-items:center}
           <aside class="wside" id="wside"></aside>
         </div>
       </div>
-      <div class="cap">Replays of four cases from our test set · outcomes as the service returned them</div>
     </div>
+    <div class="cap">Replays of four cases from our test set · outcomes as the service returned them</div>
   </section>
 
   <section class="sec" id="catches">
