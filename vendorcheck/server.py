@@ -125,7 +125,7 @@ class H(BaseHTTPRequestHandler):
         if p == "/api/me":
             return self._json(self._user())
         if p == "/api/settings":
-            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit") if k in CONFIG})
+            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit", "jev_enabled", "jev_model", "jev_yes", "jev_no", "jev_choice_min", "jev_score_min") if k in CONFIG})
         if p.startswith("/static/"):
             name = os.path.basename(p)
             fp = os.path.join(os.path.dirname(__file__), "static", name)
@@ -182,6 +182,11 @@ class H(BaseHTTPRequestHandler):
                 for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount"):
                     if k in b:
                         CONFIG[k] = float(b[k])
+                for k in ("jev_yes", "jev_no", "jev_choice_min", "jev_score_min"):
+                    if k in b:
+                        CONFIG[k] = min(1.0, max(0.0, float(b[k])))
+                if "jev_enabled" in b:
+                    CONFIG["jev_enabled"] = str(b["jev_enabled"]).strip().lower() in ("1", "true", "yes", "on")
                 store.log(None, f"settings changed by {user.get('email') or 'local'}: {b}")
                 return self._json({"ok": True})
             if p == "/api/process":

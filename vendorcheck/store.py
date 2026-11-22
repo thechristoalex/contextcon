@@ -194,8 +194,10 @@ def ledger_add(job_id, endpoint, req_hash, cache_hit, credits, latency_ms, http_
 def ledger_for(job_id):
     rows = [dict(r) for r in db().execute("SELECT endpoint, cache_hit, credits, latency_ms, http_status, at FROM ledger WHERE job_id=? ORDER BY id", (job_id,))]
     total = sum(r["credits"] for r in rows)
-    return {"calls": rows, "total_credits": round(total, 3), "paid_calls": sum(1 for r in rows if not r["cache_hit"]),
-            "cache_hits": sum(1 for r in rows if r["cache_hit"])}
+    # Jev calls (endpoint "jev:...") cost 0 Crustdata credits and are counted on their own
+    crust = [r for r in rows if not r["endpoint"].startswith("jev:")]
+    return {"calls": rows, "total_credits": round(total, 3), "paid_calls": sum(1 for r in crust if not r["cache_hit"]),
+            "cache_hits": sum(1 for r in crust if r["cache_hit"]), "jev_calls": len(rows) - len(crust)}
 
 
 def job_credits(job_id):
