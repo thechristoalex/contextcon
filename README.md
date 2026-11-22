@@ -69,9 +69,10 @@ Design, invariants, schema and failure model: **[docs/ARCHITECTURE.md](docs/ARCH
 
 A person approves every payment, judges every `HELD` item, and sends any drafted message; the system
 never sends email. The call-back for a bank change goes to the phone number on file, never the sender.
-A company named in legal news is held for a person to judge its role, never auto-rejected. Registry
-status (MCA, GST portal) is reported as "not confirmed" because those portals have no public API and use
-CAPTCHAs, which we do not bypass.
+A company named in legal news is held for a person to judge its role, never auto-rejected. MCA company
+status is reported as "not confirmed": MCA has no public API and its portal uses CAPTCHAs, which we do not
+bypass. GST registration is checked through gstin.cloud when `GSTIN_API_KEY` is set, and reported as not
+confirmed when it is not.
 
 ## Results on the test set (live Crustdata, 22 Nov 2026)
 

@@ -507,7 +507,7 @@ Startup: open DB → `ap.resume()` → `PayablesService.resume()` → background
 
 ## 11. Testing
 
-`python3 -m unittest discover tests` runs 109 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
+`python3 -m unittest discover tests` runs 119 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
 removes `TYPESAFE_API_KEY` before import. Crustdata is replaced by canned responses keyed by endpoint.
 Each test case runs against a fresh `tempfile.mkdtemp()` database and data directory.
 
@@ -520,6 +520,7 @@ Each test case runs against a fresh `tempfile.mkdtemp()` database and data direc
 | `test_bank.py` | 9 | Statement end to end, legal-name rules, re-import, one-payment reconciliation, budget |
 | `test_procure.py` | 10 | Onboarding flow and front-company block, shared bank account, invoice-number formats, file re-upload, key replay/misuse, crash after transfer, 6 concurrent payments → 1 recorded, bank change before transfer |
 | `test_website.py` | 5 | Fetch fallback order and human_mode |
+| `test_gstreg.py` | 10 | GST registry: active passes, cancelled / not registered / other name fail, cache, sandbox never decides, outage, no key = no call |
 
 ## 12. Controls → code
 
