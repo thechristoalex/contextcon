@@ -302,10 +302,15 @@ def check_gstin(x, v):
     return chk("gstin_binding", "pass", f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record", ev)
 
 
+TRUST_CHECK_VERSION = 2  # 2: the GSTIN is looked up on public pages and its PAN holder type is reported
+
+
 def trust_job_id(v):
     """The cached vendor verdict is keyed by the facts it checked. If the vendor record's name, domain,
-    director or GSTIN changes, the key changes and the vendor is checked again instead of reusing an old CLEAR."""
-    keep = {k: v.get(k) for k in ("legal_name", "domain", "director", "gstin")}
+    director or GSTIN changes, the key changes and the vendor is checked again instead of reusing an old CLEAR.
+    Bumping TRUST_CHECK_VERSION re-checks every vendor once when the check itself gains a step; replayed API
+    calls come from the response cache, so only the new step is billed."""
+    keep = {k: v.get(k) for k in ("legal_name", "domain", "director", "gstin")} | {"check_version": TRUST_CHECK_VERSION}
     return f"trust:{v['vendor_id']}:" + hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:8]
 
 
