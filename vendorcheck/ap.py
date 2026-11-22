@@ -280,7 +280,7 @@ def check_bank(x, v):
     return chk("bank_details", "pass", "Bank account matches the verified account on file", ev)
 
 
-PAN_TYPES = {"C": "company", "F": "firm / LLP", "P": "individual (proprietor)", "H": "HUF", "T": "trust", "A": "AOP", "B": "BOI", "G": "government", "L": "local authority", "J": "artificial juridical person"}
+PAN_TYPES = pipeline.PAN_TYPES  # one table for the whole app
 
 
 def check_gstin(x, v):

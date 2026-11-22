@@ -397,7 +397,7 @@ class Job:
                     self.fact("PAN holder type", prof["pan_type"], {"type": "computed", "field": "PAN 4th character", "record_date": None})
                 why = entity_type_mismatch(name, prof["pan_type_code"])
                 if why:
-                    self.flag("amber", f"{why}. A company bills under its own PAN; ask for the GST certificate", {"type": "computed", "field": "PAN 4th character"})
+                    self.flag("amber", f"{why}. A registered company or LLP has a PAN of its own; ask for the GST registration certificate", {"type": "computed", "field": "PAN 4th character"})
             else:
                 self.flag("red", f"GSTIN {gstin} fails the format/checksum test, so it is not a real GST number",
                           {"type": "computed", "field": "GSTIN check digit"})
