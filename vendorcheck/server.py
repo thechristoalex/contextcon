@@ -134,6 +134,7 @@ class H(BaseHTTPRequestHandler):
             ctype = {".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".woff2": "font/woff2", ".woff": "font/woff", ".otf": "font/otf", ".ttf": "font/ttf", ".svg": "image/svg+xml"}.get(os.path.splitext(name)[1], "application/octet-stream")
             b = open(fp, "rb").read()
             self.send_response(200)
+            self.send_header("cache-control", "no-cache")
             self.send_header("content-type", ctype)
             self.send_header("content-length", str(len(b)))
             self.end_headers()
