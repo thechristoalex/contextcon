@@ -35,7 +35,7 @@ python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in -
 
 **Web app.** `serve` starts the landing page at `/` and the app at `/app`: dashboard, inbox (with bill scanning), approvals, vendors, vendor check, bank lines, ledger, activity and settings. There is no sign-in; the approver name recorded on each payment is set in Settings.
 
-HTTP API (for another system to call): `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
+HTTP API (for another system to call): procurement services under `/api/procure/*` and `/api/portal/*` (listed in `vendorcheck/procure/api.py`), plus `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
 
 ## Results on the test set (live data, 22 Nov 2026)
 
@@ -83,6 +83,28 @@ In the app, **Inbox → Scan a bill** opens the camera: hold the bill in frame a
 - **Read once.** Files are keyed by the photo's hash: the same photo again is answered from its stored reading, and a second photo of the same bill ends as `DUPLICATE`.
 
 Tests: `python3 -m unittest tests.test_scan -v` (13 run anywhere with a fake reader; 2 use the real reader on the test photos in `data/fixtures/bills/`, made by `tests/make_bills.swift`).
+
+## Procurement services (Zoho Procurement flow)
+
+Three services follow the workflows in [Zoho Procurement's help](https://www.zoho.com/uk/procurement/help/getting-started/welcome/): Vendors with the Vendor Portal, uploaded invoices turned into Bills, and Payments Made. Each service has its own tables. The services talk through domain events (`vendor.approved`, `invoice.uploaded`, `bill.opened`, `vendor.bank_changed`, `payment.paid`). Code is in `vendorcheck/procure/`. The org screens are **Vendors**, **Uploaded Invoices**, **Bills** and **Payments Made** in `/app`. Vendors use `/portal#t=<invite token>`.
+
+| Service | Zoho flow it follows | Design pattern | What it adds for the problem statement |
+|---|---|---|---|
+| **Vendor onboarding** (`onboarding.py`) | Invite Vendor → vendor signs up in the portal (Business, Address, Bank, Preview) → *Approval Pending* → Approve / Request More Details (*Pending Review*) / Reject; Mark Inactive | **State**: one transition table, compare-and-set moves, an audit row per move. Submission checks are small Strategy functions | GSTIN check character and PAN type, IFSC format, account holder vs legal name, email domain vs website, one GSTIN or bank account per vendor, and the Crustdata vendor check. A failed check blocks approval. An approved vendor joins the vendor master the invoice desk reads. A bank change from the portal sends the vendor back to *Approval Pending*, and payments stop |
+| **Invoice upload → Bills** (`invoices.py`) | Vendor Portal › Invoices › Uploaded Documents (*Pending* → *Accepted* / *Rejected*) → Convert to Bill → *Pending Approval* → *Open* → *Partially Paid* / *Paid* (*Overdue*, *Void*) | **Chain of Responsibility** for intake: file guard → vendor guard → exact-file dedupe → store → read (Strategy per type: text / PDF / photo) → identify → duplicate invoice → PO match → bank → GSTIN. **State** for the bill | **A UUID for every invoice.** `doc_uuid` (uuid4) names each uploaded file. `invoice_uuid` = uuid5(vendor + normalised invoice number) names the invoice, so `KF/2026/0042` and `KF-2026-42` get the same UUID. It is the bill's primary key, so the database refuses a second bill for one invoice. Uploading the same file twice returns the first document (SHA-256) |
+| **Payables** (`payables.py`) | Payments Made: + New (vendor, bills, amount per bill, mode, paid through) → *Draft* → Submit → *Pending Approval* → Approve → *Paid*; Reject, Void | **Command** (`PayCommand`) for the money movement, **Decorator** (`@idempotent`) for requests, **State** for the payment, rules as a Strategy list | **No double payment**, on three layers. (1) `Idempotency-Key` on *create* and *approve*: a retry or double-click with the same key replays the first response; the same key with a different body is refused (422); while the first call is still running, a retry gets 409. (2) The amount applied to a bill can never exceed its balance minus what other in-flight payments already promise. The balance drops by a compare-and-set update that cannot go below zero. (3) The payment's UUID is the idempotency key sent to the bank (simulated payout API, one transfer per key). The payment is marked *Processing* before the bank call, so a crash is finished by `resume()` without a second transfer. The verified account is snapshotted at approval and checked again just before the bank call; a change holds the payment |
+
+The HighRadius controls against duplicate payments are invoice matching (2-way and 3-way), vendor master hygiene, approval workflows and automatic duplicate flagging. Each appears above as a rule. None of the HighRadius pages we could read covers idempotency itself, so the request, domain and bank layers are our own design. They follow standard payout-API practice.
+
+Offline tests (no key, no credits): `python3 -m unittest tests.test_procure -v`. They cover:
+- the full onboarding flow, and front companies blocked
+- duplicate bank accounts across vendors
+- the same invoice under two number formats
+- re-uploading the same file
+- key replay and key misuse
+- a crash after the bank transfer, which resumes and pays once
+- six concurrent payments for one bill, of which exactly one is recorded
+- a bank change between approval and transfer
 
 ## How it works
 

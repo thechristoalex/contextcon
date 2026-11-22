@@ -13,6 +13,8 @@ API
   GET  /api/events                activity log
   POST /cases {vendor_name, website, director}   vendor check on its own (5.1 + 5.2)
   GET  /cases/<id>
+  /api/procure/*, /api/portal/*   vendor onboarding, invoice upload -> bills, payments made (see procure/api.py)
+  GET  /portal                     the vendor portal (sign-up + invoice upload)
 """
 import base64
 import json
@@ -30,6 +32,7 @@ from .config import CONFIG
 HERE = os.path.dirname(__file__)
 UI = os.path.join(HERE, "ui.html")
 LANDING = os.path.join(HERE, "landing.html")
+PORTAL = os.path.join(HERE, "portal.html")
 _busy = threading.Lock()
 
 def _inv_row(r):
@@ -64,9 +67,34 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         return self.wfile.write(b)
 
+    def _procure(self, method, body=None):
+        from .procure import api as procure_api
+        r = procure_api.route(method, self.path, body, self.headers, CONFIG.get("approver_name", "AP lead"))
+        if r is None:
+            return False
+        code, obj = r
+        if isinstance(obj, procure_api.FileResponse):
+            b = open(obj.path, "rb").read()
+            self.send_response(200)
+            self.send_header("content-type", obj.ctype)
+            self.send_header("content-length", str(len(b)))
+            self.end_headers()
+            self.wfile.write(b)
+        else:
+            self._json(obj, code)
+        return True
+
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         p = u.path
+        if p.startswith(("/api/procure", "/api/portal")):
+            try:
+                if self._procure("GET"):
+                    return
+            except Exception as e:
+                return self._json({"error": repr(e)}, 500)
+        if p in ("/portal", "/portal/"):
+            return self._page(PORTAL)
         if p in ("/", "/index.html"):
             return self._page(LANDING)
         if p in ("/app", "/app/"):
@@ -135,6 +163,8 @@ class H(BaseHTTPRequestHandler):
         p = urllib.parse.urlparse(self.path).path
         b = self._body()
         try:
+            if p.startswith(("/api/procure", "/api/portal")) and self._procure("POST", b):
+                return
             if p == "/api/settings":
                 for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "min_read_confidence"):
                     if k in b:
@@ -194,6 +224,10 @@ def serve(port=8080):
     done = ap.resume()  # crash recovery: pay anything approved but unpaid, exactly once
     if done:
         print(f"resumed {len(done)} approved payment(s)")
+    from .procure import api as procure_api
+    again = procure_api.services()[2].resume()  # payments made: finish any approved payment interrupted by a crash
+    if again:
+        print(f"resumed {len(again)} payment(s) made")
     from . import scan
     threading.Thread(target=scan.warm, daemon=True).start()  # load the bill reader before the first scan
     srv = ThreadingHTTPServer(("127.0.0.1", port), H)

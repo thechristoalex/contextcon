@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css?v=3">
+<link rel="stylesheet" href="/static/procure.css?v=1">
+<script src="/static/procure.js?v=1"></script>
 <style>
 #cam{width:100%;max-width:640px;display:block;background:#000;border-radius:6px}
 .scanph{position:relative;align-self:start}.scanph img{width:100%;display:block;border-radius:4px}
@@ -89,7 +91,8 @@ const IC={
  led:'<path d="M4 4h16v16H4z"/><path d="M4 9h16M9 9v11"/>',log:'<path d="M4 6h16M4 12h16M4 18h10"/>',set:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>'};
 const SCREENS=[
  {g:'Work',id:'dash',t:'Dashboard',ic:'dash',k:'d'},{g:'Work',id:'inbox',t:'Inbox',ic:'inbox',k:'i'},{g:'Work',id:'approvals',t:'Approvals',ic:'appr',k:'a'},
- {g:'Records',id:'vendors',t:'Vendors',ic:'vend',k:'v'},{g:'Records',id:'ledger',t:'Ledger',ic:'led',k:'l'},
+...(window.PROC_SCREENS||[]),
+ {g:'Records',id:'vendors',t:'Vendor master',ic:'vend',k:'v'},{g:'Records',id:'ledger',t:'Ledger',ic:'led',k:'l'},
  {g:'Tools',id:'vcheck',t:'Vendor check',ic:'check',k:'c'},{g:'Tools',id:'bank',t:'Bank lines',ic:'bank',k:'b'},
  {g:'System',id:'activity',t:'Activity',ic:'log',k:'y'},{g:'System',id:'settings',t:'Settings',ic:'set',k:'s'}];
 let ROUTE={id:'dash'};
@@ -104,9 +107,9 @@ async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
 const blobUrl=async p=>{const r=await fetch(p);return URL.createObjectURL(await r.blob())};
-async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
+async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();document.querySelectorAll('.zmodal').forEach(m=>m.remove());V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
-  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
+  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings,...(window.PROC_VIEWS||{})})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
 
 /* scan a paper bill: same box and wiring on Dashboard and Inbox (needs #scanbtn in the topbar) */

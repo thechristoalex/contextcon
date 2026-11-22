@@ -26,8 +26,17 @@ def load(name):
         return json.load(f)
 
 
+def fixture_vendors():
+    return load("vendors.json")
+
+
 def vendors():
-    return {v["vendor_id"]: v for v in load("vendors.json")}
+    """The vendor master: the client's file, plus vendors approved through onboarding (procure service)."""
+    out = {v["vendor_id"]: v for v in fixture_vendors()}
+    from .procure import onboarding
+    for v in onboarding.active_master():
+        out.setdefault(v["vendor_id"], v)
+    return out
 
 
 def vendor_hash(v):

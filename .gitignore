@@ -18,3 +18,5 @@ data/fixtures/statements/
 data/bin/
 data/fixtures/scans/
 data/fixtures/inbox/scan_*.txt
+.venv/
+data/services/
