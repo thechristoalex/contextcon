@@ -25,7 +25,8 @@ header{position:sticky;top:0;z-index:5;background:var(--paper);border-bottom:1px
 .logo{display:flex;align-items:center;gap:10px;font-weight:600;font-size:17px;color:var(--blue);cursor:pointer}
 .logo svg{display:block}
 nav{display:flex;gap:22px}
-nav a{color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;padding:19px 0;border-bottom:2px solid transparent}
+nav{scrollbar-width:none}nav::-webkit-scrollbar{display:none}
+nav a{white-space:nowrap;color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;padding:19px 0;border-bottom:2px solid transparent}
 nav a.on{border-bottom-color:var(--blue)} nav a:hover{text-decoration:none;color:var(--blue)}
 .actions{margin-left:auto;display:flex;gap:10px}
 .btn{font-size:13px;text-transform:uppercase;letter-spacing:.02em;border-radius:4px;padding:9px 14px;cursor:pointer;border:1px solid var(--steel);background:var(--paper);color:var(--ink)}
@@ -175,7 +176,7 @@ async function home(){
    ['Pay once','A person approves. The payment key is vendor and invoice number, so a crash or a retry can never pay twice.']];
   app.innerHTML=`<section class="hero">${plus()}
     <div class="lbl" style="margin-bottom:20px">Trust and compliance · Buying and paying</div>
-    <h1>Every vendor proven first. Every invoice paid once.</h1>
+    <h1>Every vendor proven first.<br>Every invoice paid once.</h1>
     <p>An accounts-payable desk for an Indian 3PL that verifies who it is paying on live data, holds anything it cannot prove with a cited reason, and lets a person approve the one step that cannot be undone.</p>
     <div style="display:flex;gap:10px;justify-content:center"><button class="btn fill" onclick="go('queue')">Open the inbox</button><button class="btn" onclick="document.getElementById('arch').scrollIntoView({behavior:'smooth'})">How it works</button></div>
   </section>
