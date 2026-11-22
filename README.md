@@ -33,9 +33,9 @@ A vendor check on its own (5.1 + 5.2):
 python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
 ```
 
-**Web app.** `serve` starts the public landing page at `/` and the signed-in app at `/app` (dashboard, inbox, approvals, vendors, vendor check, ledger, activity, settings). Sign-in uses Supabase Auth (Google, or an email sign-in link). Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` to turn it on. Every API call then needs a valid session token, and the approver recorded on a payment is the signed-in email, mirrored to a Supabase `approvals` table with row-level security. Without those two variables, or with `AUTH_REQUIRED=0`, the app runs in local mode with no sign-in. The CLI never needs sign-in.
+**Web app.** `serve` starts the landing page at `/` and the app at `/app`: dashboard, inbox (with bill scanning), approvals, vendors, vendor check, bank lines, ledger, activity and settings. There is no sign-in; the approver name recorded on each payment is set in Settings.
 
-HTTP API (for another system to call; send `authorization: Bearer <session token>` when sign-in is on): `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
+HTTP API (for another system to call): `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
 
 ## Results on the test set (live data, 22 Nov 2026)
 

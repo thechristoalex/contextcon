@@ -43,6 +43,7 @@ CONFIG = {
     "jev_timeout_s": 20,
     "jev_retries": 2,
     # a field read from a bill photo below this confidence (0..1) holds the bill for a person to compare
+    "approver_name": os.environ.get("APPROVER_NAME", "AP lead"),
     "min_read_confidence": float(os.environ.get("MIN_READ_CONFIDENCE", "0.5")),
 }
 

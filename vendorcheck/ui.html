@@ -21,7 +21,7 @@
     <div class="brand"><svg width="20" height="18" viewBox="0 0 26 22" fill="none" stroke="#384ce3" stroke-width="2"><path d="M13 2 24 7 13 12 2 7z"/><path d="M2 11.5 13 16.5 24 11.5"/><path d="M2 15.5 13 20.5 24 15.5"/></svg>Payables Desk</div>
     <button class="kbtn" id="kopen" aria-label="Open command palette"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Search or jump to…<span class="kbd" style="margin-left:auto">⌘K</span></button>
     <nav class="nav" id="nav"></nav>
-    <div class="me"><div class="avatar" id="av">·</div><div class="who" id="who">…</div><button class="btn ghost sm" id="signout" title="Sign out">Sign out</button></div>
+    <div class="me"><div class="avatar" id="av">·</div><div class="who" id="who">…</div><button class="btn ghost sm" id="setme" title="Change approver name">Edit</button></div>
   </aside>
   <section class="main">
     <div class="top" id="top"></div>
@@ -31,8 +31,6 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="pal" id="pal" role="dialog" aria-modal="true" aria-label="Command palette"><div class="bx"><input id="pq" placeholder="Type a command or search documents…" autocomplete="off"><div class="res" id="pres"></div></div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="/config.js"></script>
 <script>
 /* ============ utilities ============ */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -67,7 +65,7 @@ function toast(msg,kind='ok'){const t=document.createElement('div');t.className=
   t.innerHTML=(kind==='err'?'<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="currentColor"/></svg>':'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 8.5 3 3 7-7"/></svg>')+`<div>${msg}</div>`;
   $('#toasts').appendChild(t);setTimeout(()=>{t.classList.add('out');setTimeout(()=>t.remove(),200)},3200)}
 /* button loading state */
-async function busy(btn,label,fn){const html=btn.innerHTML;btn.disabled=true;btn.innerHTML=`<span class="spin"></span>${label}`;try{return await fn()}catch(e){if(e.message!=='signed out')toast(esc(e.message),'err')}finally{if(document.body.contains(btn)){btn.disabled=false;btn.innerHTML=html}}}
+async function busy(btn,label,fn){const html=btn.innerHTML;btn.disabled=true;btn.innerHTML=`<span class="spin"></span>${label}`;try{return await fn()}catch(e){toast(esc(e.message),'err')}finally{if(document.body.contains(btn)){btn.disabled=false;btn.innerHTML=html}}}
 /* copy to clipboard with inline confirmation */
 function bindCopy(root=document){root.querySelectorAll('[data-copy]').forEach(el=>el.onclick=async e=>{e.stopPropagation();
   try{await navigator.clipboard.writeText(el.dataset.copy)}catch{};const o=el.textContent;el.classList.add('ok');el.textContent='Copied';setTimeout(()=>{el.classList.remove('ok');el.textContent=o},1200)})}
@@ -78,11 +76,9 @@ function countUp(root=document){root.querySelectorAll('[data-count]').forEach(el
 const skel=(n=6)=>`<div class="tblwrap"><table class="tbl"><tbody>${Array.from({length:n},(_,i)=>`<tr><td><div class="skel" style="width:${45+((i*37)%45)}%"></div></td><td><div class="skel" style="width:60%"></div></td><td><div class="skel" style="width:30%"></div></td></tr>`).join('')}</tbody></table></div>`;
 
 /* ============ auth + api ============ */
-const sb=(window.SUPA&&window.supabase)?window.supabase.createClient(SUPA.url,SUPA.key):null;
-let TOKEN=null, ME=null, INV=[];
-async function api(p,b){const h={'content-type':'application/json'};if(TOKEN)h.authorization='Bearer '+TOKEN;
+let ME=null, INV=[];
+async function api(p,b){const h={'content-type':'application/json'};
   const r=await fetch(p,b?{method:'POST',headers:h,body:JSON.stringify(b)}:{headers:h});
-  if(r.status===401){location.href='/?signin=1';throw new Error('signed out')}
   const j=await r.json(); if(j&&j.error&&r.status>=400)throw new Error(j.error); return j}
 
 /* ============ navigation ============ */
@@ -107,10 +103,10 @@ function topbar(title,{crumb,acts=''}={}){TOP.innerHTML=(crumb?`<div class="crum
 async function refreshInv(){INV=await api('/api/invoices');drawNav()}
 let CAM=null;
 const stopCam=()=>{if(CAM){CAM.getTracks().forEach(t=>t.stop());CAM=null}};
-const blobUrl=async p=>{const h={};if(TOKEN)h.authorization='Bearer '+TOKEN;const r=await fetch(p,{headers:h});return URL.createObjectURL(await r.blob())};
+const blobUrl=async p=>{const r=await fetch(p);return URL.createObjectURL(await r.blob())};
 async function go(id,arg){stopCam();ROUTE={id,arg};V.classList.toggle('flush',id==='case');drawNav();V.scrollTop=0;
   history.replaceState(null,'',id==='case'?'#case-'+encodeURIComponent(arg):'#'+id);
-  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){if(e.message!=='signed out'){V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
+  try{await ({dash,inbox,case:caseView,approvals,vendors,ledger,vcheck,bank,activity,settings})[id](arg)}catch(e){{V.innerHTML=`<div class="empty"><b>Could not load this page</b>${esc(e.message)}</div>`}}}
 window.go=go;
 
 /* ============ screens ============ */
@@ -186,7 +182,7 @@ async function caseView(key){
   V.innerHTML=`<div class="case"><div class="body">
     <div class="banner ${s}"><span class="st ${s}">${ICON[s]||ICON.none}</span><div><h2>${head}</h2><p>${esc(d.reason)}</p>
       ${c.payment?`<p class="mono" style="margin-top:8px">${inr(c.payment.amount_inr)} → ${esc(c.payment.payee)} · a/c ${esc(c.payment.account)} · ref <span class="copy" data-copy="${esc(c.payment.ref)}">${esc(c.payment.ref)}</span> · approved by ${esc(c.payment.approved_by)}</p>`:''}</div></div>
-    ${can?`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="hold" id="hold"><i class="fill"></i><span id="holdl">Hold to approve and pay ${inr(x.amount_inr)}</span></button><span class="f3">Press and hold for a second. Recorded as <b class="f2">${esc(ME&&ME.email||'local approver')}</b>.</span></div>`:''}
+    ${can?`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px"><button class="hold" id="hold"><i class="fill"></i><span id="holdl">Hold to approve and pay ${inr(x.amount_inr)}</span></button><span class="f3">Press and hold for a second. Recorded as <b class="f2">${esc(ME&&ME.name||'AP lead')}</b>.</span></div>`:''}
     ${canRe?`<button class="btn" id="re">Replay checks</button>`:''}
     <div class="sec"><span class="lbl">Checks</span><span class="f3">${d.checks.filter(k=>k.result==='pass').length} of ${d.checks.length} passed</span></div>
     <div class="rail">${d.checks.map(k=>`<details class="chk" ${k.result!=='pass'?'open':''}><summary><span class="dot">${ICON[k.result]||ICON.none}</span><span class="name">${esc(chkName(k.check))}</span><span class="why">${esc(k.reasoning)}</span>${(k.evidence||[]).length?`<span class="chev">›</span>`:''}</summary>
@@ -235,7 +231,7 @@ async function approvals(){
   topbar('Approvals');V.innerHTML=skel();await refreshInv();
   const tb=(rows,empty)=>`<div class="tblwrap"><table class="tbl"><thead><tr><th>Status</th><th>Document</th><th>Vendor</th><th class="r">Amount</th><th>Reason</th><th class="r">Since</th></tr></thead><tbody>${rows.map((r,i)=>`<tr class="click rowin" style="animation-delay:${i*20}ms" data-k="${esc(r.invoice_key)}"><td>${st(r.state)}</td><td class="mono">${esc(r.invoice_no||nice(r.doc_type))}</td><td>${esc(r.vendor_id||'—')}</td><td class="r mono num">${inr(r.amount_inr)}</td><td class="f2" title="${esc(r.reason)}">${esc(r.reason||'')}</td><td class="r f3">${ago(r.updated_at)}</td></tr>`).join('')||`<tr><td colspan="6"><div class="empty"><b>${empty}</b></div></td></tr>`}</tbody></table></div>`;
   const w=INV.filter(r=>r.state==='awaiting_approval'),h=INV.filter(r=>r.state==='held');
-  V.innerHTML=`<p class="f2" style="margin:0 0 16px">Every payment waits here for a person. Approval is recorded against your signed-in identity${ME&&ME.email?` (<span class="mono">${esc(ME.email)}</span>)`:''}.</p>
+  V.innerHTML=`<p class="f2" style="margin:0 0 16px">Every payment waits here for a person. Every approval is recorded with the approver's name (<span class="mono">${esc(ME&&ME.name||'AP lead')}</span>, set in Settings).</p>
    <div class="sec" style="margin-top:0"><span class="lbl">Ready to pay</span><span class="f3">${w.length}</span></div>${tb(w,'Nothing waiting for approval')}
    <div class="sec"><span class="lbl">Held: needs a decision or a call-back</span><span class="f3">${h.length}</span></div>${tb(h,'Nothing held')}`;
   $$('tr[data-k]').forEach(tr=>tr.onclick=()=>go('case',tr.dataset.k));
@@ -302,10 +298,10 @@ async function activity(){
 async function settings(){
   topbar('Settings');const s=await api('/api/settings');
   const f=[['max_credits_per_job','Cost limit per job','Crustdata credits. A job that reaches it stops and says cannot verify.'],['max_seconds_per_job','Time limit per job','Seconds.'],['auto_approve_below_inr','Auto-approve payments below','₹. 0 means every payment needs a person.'],['min_age_years','Flag companies younger than','Years.'],['min_headcount','Flag headcount below','People.'],['min_read_confidence','Hold a scanned bill when a field is read below','Confidence, 0 to 1. A person compares that field with the photo.']];
-  V.innerHTML=`<p class="f2" style="margin:0 0 16px">Limits and approval policy for every run. Changes apply to the next job and are logged with your identity.</p>
-  <div style="max-width:640px">${f.map(([k,l,d])=>`<div class="field"><div><div class="h">${l}</div><div class="d">${d}</div></div><input id="s_${k}" class="num" value="${esc(s[k])}"></div>`).join('')}
+  V.innerHTML=`<p class="f2" style="margin:0 0 16px">Limits and approval policy for every run. Changes apply to the next job and are written to the activity log.</p>
+  <div style="max-width:640px"><div class="field"><div><div class="h">Approver name</div><div class="d">Recorded on every payment you approve.</div></div><input id="s_approver_name" value="${esc(s.approver_name||'AP lead')}"></div>${f.map(([k,l,d])=>`<div class="field"><div><div class="h">${l}</div><div class="d">${d}</div></div><input id="s_${k}" class="num" value="${esc(s[k])}"></div>`).join('')}
   <div style="margin-top:16px"><button class="btn primary" id="save">Save settings</button></div></div>`;
-  $('#save').onclick=e=>busy(e.currentTarget,'Saving…',async()=>{const b={};f.forEach(([k])=>b[k]=$('#s_'+k).value);await api('/api/settings',b);toast('Settings saved')});
+  $('#save').onclick=e=>busy(e.currentTarget,'Saving…',async()=>{const b={approver_name:$('#s_approver_name').value};f.forEach(([k])=>b[k]=$('#s_'+k).value);await api('/api/settings',b);ME={name:b.approver_name};$('#who').textContent=b.approver_name;$('#av').textContent=(b.approver_name||'A')[0].toUpperCase();toast('Settings saved')});
 }
 
 /* ============ command palette + keyboard ============ */
@@ -342,19 +338,14 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ============ boot ============ */
-$('#signout').onclick=async()=>{if(sb)await sb.auth.signOut();location.href='/'};
+$('#setme').onclick=()=>go('settings');
 (async()=>{
   try{
-    if(window.SUPA&&SUPA.required){
-      if(!sb){V.innerHTML='<div class="empty"><b>Sign-in library failed to load</b>Check your connection and reload.</div>';return}
-      const {data}=await sb.auth.getSession();if(!data.session){location.href='/?signin=1';return}
-      TOKEN=data.session.access_token;sb.auth.onAuthStateChange((_e,s)=>{TOKEN=s?s.access_token:null});
-    }else $('#signout').style.display='none';
-    ME=await api('/api/me');const em=ME&&ME.email;$('#who').textContent=em||'Local mode';$('#av').textContent=(em||'L')[0].toUpperCase();
+    ME=await api('/api/me');const nm=ME&&ME.name||'AP lead';$('#who').textContent=nm;$('#av').textContent=nm[0].toUpperCase();
     await refreshInv();
     const h=decodeURIComponent(location.hash.slice(1));
     if(h.startsWith('case-'))go('case',h.slice(5));else go(SCREENS.some(s=>s.id===h)?h:'dash');
-  }catch(e){if(e.message!=='signed out')V.innerHTML=`<div class="empty"><b>Could not start</b>${esc(e.message)}</div>`}
+  }catch(e){V.innerHTML=`<div class="empty"><b>Could not start</b>${esc(e.message)}</div>`}
 })();
 </script>
 </body>

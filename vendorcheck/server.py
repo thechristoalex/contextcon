@@ -32,44 +32,6 @@ UI = os.path.join(HERE, "ui.html")
 LANDING = os.path.join(HERE, "landing.html")
 _busy = threading.Lock()
 
-# ---- auth: Supabase sessions (Google or email link). The CLI never needs this. ----
-SUPA_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-SUPA_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
-AUTH_REQUIRED = os.environ.get("AUTH_REQUIRED", "1" if SUPA_URL else "0") == "1"
-_tok_cache = {}
-
-
-def verify_token(token):
-    """Ask Supabase who this access token belongs to. Cached for 5 minutes."""
-    if not token:
-        return None
-    hit = _tok_cache.get(token)
-    if hit and hit[1] > time.time():
-        return hit[0]
-    req = urllib.request.Request(SUPA_URL + "/auth/v1/user", headers={"apikey": SUPA_KEY, "authorization": "Bearer " + token})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as r:
-            u = json.loads(r.read())
-    except Exception:
-        return None
-    user = {"id": u.get("id"), "email": u.get("email")}
-    _tok_cache[token] = (user, time.time() + 300)
-    return user
-
-
-def record_approval(token, user, key, amount):
-    """Write the approval to Supabase (row-level security: a user can only insert rows as themselves)."""
-    if not (SUPA_URL and token):
-        return
-    body = json.dumps({"invoice_key": key, "amount_inr": amount, "approver_email": user.get("email")}).encode()
-    req = urllib.request.Request(SUPA_URL + "/rest/v1/approvals", data=body, method="POST", headers={
-        "apikey": SUPA_KEY, "authorization": "Bearer " + token, "content-type": "application/json", "prefer": "return=minimal"})
-    try:
-        urllib.request.urlopen(req, timeout=10).read()
-    except Exception as e:
-        store.log(None, f"approval mirror to Supabase failed: {e}", "warn")
-
-
 def _inv_row(r):
     d = json.loads(r["decision_json"] or "{}")
     x = json.loads(r["extracted_json"] or "{}")
@@ -102,14 +64,6 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         return self.wfile.write(b)
 
-    def _user(self):
-        """None if auth is required and the request has no valid session."""
-        if not AUTH_REQUIRED:
-            return {"email": None, "id": None, "local": True}
-        h = self.headers.get("authorization") or ""
-        self._token = h[7:] if h.lower().startswith("bearer ") else None
-        return verify_token(self._token)
-
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         p = u.path
@@ -117,18 +71,10 @@ class H(BaseHTTPRequestHandler):
             return self._page(LANDING)
         if p in ("/app", "/app/"):
             return self._page(UI)
-        if p == "/config.js":
-            js = f"window.SUPA={json.dumps({'url': SUPA_URL, 'key': SUPA_KEY, 'required': AUTH_REQUIRED}) if SUPA_URL else 'null'};".encode()
-            self.send_response(200)
-            self.send_header("content-type", "text/javascript")
-            self.end_headers()
-            return self.wfile.write(js)
-        if (p.startswith("/api/") or p.startswith("/cases")) and not self._user():
-            return self._json({"error": "sign in required"}, 401)
         if p == "/api/me":
-            return self._json(self._user())
+            return self._json({"name": CONFIG.get("approver_name", "AP lead")})
         if p == "/api/settings":
-            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit", "jev_enabled", "jev_model", "jev_yes", "jev_no", "jev_choice_min", "jev_score_min", "min_read_confidence") if k in CONFIG})
+            return self._json({k: CONFIG[k] for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "max_people_screened", "inr_per_credit", "jev_enabled", "jev_model", "jev_yes", "jev_no", "jev_choice_min", "jev_score_min", "min_read_confidence", "approver_name") if k in CONFIG})
         if p.startswith("/static/"):
             name = os.path.basename(p)
             fp = os.path.join(os.path.dirname(__file__), "static", name)
@@ -188,9 +134,6 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         p = urllib.parse.urlparse(self.path).path
         b = self._body()
-        user = self._user()
-        if not user:
-            return self._json({"error": "sign in required"}, 401)
         try:
             if p == "/api/settings":
                 for k in ("max_credits_per_job", "max_seconds_per_job", "auto_approve_below_inr", "min_age_years", "min_headcount", "min_read_confidence"):
@@ -201,7 +144,9 @@ class H(BaseHTTPRequestHandler):
                         CONFIG[k] = min(1.0, max(0.0, float(b[k])))
                 if "jev_enabled" in b:
                     CONFIG["jev_enabled"] = str(b["jev_enabled"]).strip().lower() in ("1", "true", "yes", "on")
-                store.log(None, f"settings changed by {user.get('email') or 'local'}: {b}")
+                if b.get("approver_name"):
+                    CONFIG["approver_name"] = str(b["approver_name"])[:80]
+                store.log(None, f"settings changed by {CONFIG.get('approver_name', 'AP lead')}: {b}")
                 return self._json({"ok": True})
             if p == "/api/process":
                 with _busy:
@@ -214,13 +159,8 @@ class H(BaseHTTPRequestHandler):
                 with _busy:
                     return self._json(ap.process_file(path))
             if p == "/api/approve":
-                # the approver is the signed-in identity, not a typed name
-                who = user.get("email") or b.get("by") or "local approver"
-                r = ap.approve(b["key"], who)
-                if r.get("ok"):
-                    inv = store.db().execute("SELECT extracted_json FROM invoices WHERE invoice_key=?", (b["key"],)).fetchone()
-                    record_approval(getattr(self, "_token", None), user, b["key"], json.loads(inv["extracted_json"]).get("amount_inr"))
-                return self._json(r)
+                who = b.get("by") or CONFIG.get("approver_name", "AP lead")
+                return self._json(ap.approve(b["key"], who))
             if p == "/api/bank":
                 from . import bank
                 name = os.path.basename(b.get("name") or f"statement_{int(time.time())}.csv")

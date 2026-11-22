@@ -110,17 +110,6 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(44px,6.4vw,76px);l
 .end h2{font-family:var(--display);font-weight:400;font-size:clamp(34px,4.2vw,48px);margin:0 0 20px}
 footer{border-top:1px solid var(--line);color:var(--f3);font-size:13px}
 footer .wrap{display:flex;gap:20px;height:56px;align-items:center}
-.modal{position:fixed;inset:0;background:rgba(9,35,79,.45);display:none;align-items:center;justify-content:center;z-index:30;padding:16px}
-.modal.on{display:flex;animation:fd .15s}
-@keyframes fd{from{opacity:0}}
-.sheet{background:var(--bg);border:1px solid var(--line2);border-radius:10px;max-width:400px;width:100%;padding:26px;animation:up .22s var(--ease)}
-@keyframes up{from{opacity:0;transform:translateY(8px) scale(.99)}}
-.sheet h3{font-family:var(--display);font-weight:400;font-size:32px;margin:4px 0 18px}
-.sheet .btn{width:100%;justify-content:center;margin-bottom:10px;height:42px}
-.sheet input{width:100%;height:42px;border:1px solid var(--line2);border-radius:4px;padding:0 12px;font:14px var(--sans);margin-bottom:10px}
-.sheet input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
-.or{display:flex;align-items:center;gap:10px;color:var(--f3);font:500 11px var(--mono);margin:6px 0 14px}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
-.msg{min-height:20px;font-size:13px;color:var(--f2)}
 :focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 @media(max-width:860px){.links{display:none}.wbody{grid-template-columns:1fr}.wside{border-left:0;border-top:1px solid var(--line)}.grid3,.band{grid-template-columns:1fr}.band{padding:24px}.hero{padding-top:48px}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.row{opacity:1}.verdict{opacity:1;transform:none}}
@@ -130,7 +119,7 @@ footer .wrap{display:flex;gap:20px;height:56px;align-items:center}
 <header id="hd"><div class="wrap nav">
   <a class="logo" href="#"><svg width="22" height="19" viewBox="0 0 26 22" fill="none" stroke="#384ce3" stroke-width="2"><path d="M13 2 24 7 13 12 2 7z"/><path d="M2 11.5 13 16.5 24 11.5"/><path d="M2 15.5 13 20.5 24 15.5"/></svg>Payables Desk</a>
   <nav class="links"><a href="#product">Product</a><a href="#catches">What it catches</a><a href="#pricing">Pricing</a></nav>
-  <div class="acts"><button class="btn" data-signin>Sign in</button><button class="btn fill" data-signin>Get started <span class="ar">→</span></button></div>
+  <div class="acts"><a class="btn fill" href="/app">Open the desk <span class="ar">→</span></a></div>
 </div></header>
 
 <main class="wrap">
@@ -138,7 +127,7 @@ footer .wrap{display:flex;gap:20px;height:56px;align-items:center}
     <div class="eyebrow"><i></i>Accounts payable for Indian logistics</div>
     <h1>Every vendor proven first.<br>Every invoice paid once.</h1>
     <p class="lead">Checks who you are paying on live data, holds anything it cannot prove with a cited reason, and asks a person only for the step that cannot be undone.</p>
-    <div class="cta"><button class="btn fill lg" data-signin>Sign in with Google <span class="ar">→</span></button><a class="btn lg" href="#catches">See what it catches</a></div>
+    <div class="cta"><a class="btn fill lg" href="/app">Open the desk <span class="ar">→</span></a><a class="btn lg" href="#catches">See what it catches</a></div>
     <div class="proof"><span><b>Every fact</b> cited and dated</span><span><b>0</b> invoices paid twice</span><span><b>₹0</b> model cost per decision</span></div>
 
     <div class="stage" id="stage">
@@ -174,21 +163,12 @@ footer .wrap{display:flex;gap:20px;height:56px;align-items:center}
     </div>
   </section>
 
-  <section class="end"><h2>Clear your first vendor in minutes.</h2><button class="btn fill lg" data-signin>Get started <span class="ar">→</span></button></section>
+  <section class="end"><h2>Clear your first vendor in minutes.</h2><a class="btn fill lg" href="/app">Open the desk <span class="ar">→</span></a></section>
 </main>
-<footer><div class="wrap"><span>Payables Desk · ContextCon 05, BITS Pilani</span><a href="#" data-signin style="margin-left:auto">Sign in</a></div></footer>
+<footer><div class="wrap"><span>Payables Desk · ContextCon 05, BITS Pilani</span><a href="/app" style="margin-left:auto">Open the desk</a></div></footer>
 
-<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mt"><div class="sheet">
-  <div class="lbl">Sign in</div><h3 id="mt">Welcome.</h3>
-  <button class="btn" id="g"><svg width="16" height="16" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.6 13.3l7.8 6C12.3 13.6 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.4 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.3.8-4.7l-7.8-6C.9 16.6 0 20.2 0 24s.9 7.4 2.6 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.4 0-11.7-4.1-13.6-9.8l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
-  <div class="or">OR</div>
-  <input id="em" type="email" placeholder="Work email" autocomplete="email">
-  <button class="btn fill" id="ml">Email me a sign-in link</button>
-  <div class="msg" id="msg"></div>
-</div></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="/config.js"></script>
+
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -237,19 +217,6 @@ $('#stage').addEventListener('pointerenter',()=>{paused=true;$('#stage').classLi
 $('#stage').addEventListener('pointerleave',()=>{if(!$('#hb')||!$('#hb').classList.contains('ok')){paused=false;$('#stage').classList.remove('paused');timers.push(setTimeout(()=>play((cur+1)%CASES.length),1800))}});
 play(0);
 
-/* sign-in */
-const M=$('#modal'),msg=t=>$('#msg').textContent=t;
-const sb=(window.SUPA&&window.supabase)?window.supabase.createClient(SUPA.url,SUPA.key):null;
-const open=async e=>{e&&e.preventDefault();if(sb){const {data}=await sb.auth.getSession();if(data.session){location.href='/app';return}}else if(!(window.SUPA&&SUPA.required)){location.href='/app';return}M.classList.add('on');setTimeout(()=>$('#em').focus(),50)};
-$$('[data-signin]').forEach(b=>b.onclick=open);
-M.onclick=e=>{if(e.target===M)M.classList.remove('on')};
-addEventListener('keydown',e=>{if(e.key==='Escape')M.classList.remove('on')});
-$('#g').onclick=async()=>{if(!sb)return msg('Sign-in is not configured on this server.');const {error}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+'/app'}});if(error)msg(error.message)};
-$('#ml').onclick=async()=>{if(!sb)return msg('Sign-in is not configured on this server.');const email=$('#em').value.trim();if(!email)return msg('Enter your work email.');
-  const b=$('#ml');b.disabled=true;b.textContent='Sending…';const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+'/app'}});
-  b.disabled=false;b.textContent='Email me a sign-in link';msg(error?error.message:'Check your inbox for a sign-in link.')};
-if(new URLSearchParams(location.search).has('signin'))setTimeout(open,60);
-if(sb)sb.auth.getSession().then(({data})=>{if(data.session)$$('.acts [data-signin]').forEach(b=>b.innerHTML=b.classList.contains('fill')?'Open app <span class="ar">→</span>':'Signed in')});
 </script>
 </body>
 </html>
