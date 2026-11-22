@@ -66,6 +66,37 @@ def gstin_valid(g):
     return chars[(36 - s % 36) % 36] == g[14]
 
 
+# PAN 4th character: the kind of holder (Income Tax Department PAN structure)
+PAN_TYPES = {"C": "company", "F": "firm or LLP", "P": "individual", "H": "Hindu undivided family", "T": "trust",
+             "A": "association of persons", "B": "body of individuals", "G": "government",
+             "L": "local authority", "J": "artificial juridical person"}
+
+
+def gstin_profile(g):
+    """What a GSTIN says about itself, with no API call: validity, state, PAN and the PAN holder type."""
+    g = (g or "").strip().upper()
+    if not g:
+        return None
+    pan = g[2:12] if len(g) >= 12 else None
+    code = pan[3] if pan else None
+    return {"gstin": g, "valid": gstin_valid(g), "state_code": g[:2], "state": GST_STATES.get(g[:2]),
+            "pan": pan, "pan_type_code": code, "pan_type": PAN_TYPES.get(code)}
+
+
+_COMPANY_WORDS = re.compile(r"\b(?:private\s+limited|pvt\.?\s*ltd\.?|limited|ltd\.?)(?=\W|$)", re.I)
+_LLP_WORDS = re.compile(r"\bl\.?l\.?p\b\.?", re.I)
+
+
+def entity_type_mismatch(name, pan_type_code):
+    """A name that says company or LLP on a PAN of another kind. None when they agree or the name says neither."""
+    if not name or not pan_type_code:
+        return None
+    said, want = (("LLP", "F") if _LLP_WORDS.search(name) else ("company", "C") if _COMPANY_WORDS.search(name) else (None, None))
+    if not said or pan_type_code == want:
+        return None
+    return f"Name says {said} but the PAN in the GSTIN belongs to {PAN_TYPES.get(pan_type_code, 'an unknown holder type')} (4th character {pan_type_code})"
+
+
 def job_id_for(req):
     if req.get("request_id"):
         return str(req["request_id"])
@@ -344,6 +375,12 @@ class Job:
             if gstin_valid(gstin):
                 self.fact("GSTIN format and checksum", f"{gstin} is well-formed; state code {gstin[:2]} = {GST_STATES.get(gstin[:2], 'unknown')}; PAN {gstin[2:12]}",
                           {"type": "computed", "field": "GSTIN check digit (15th character)", "record_date": None})
+                prof = gstin_profile(gstin)
+                if prof["pan_type"]:
+                    self.fact("PAN holder type", prof["pan_type"], {"type": "computed", "field": "PAN 4th character", "record_date": None})
+                why = entity_type_mismatch(name, prof["pan_type_code"])
+                if why:
+                    self.flag("amber", f"{why}. A company bills under its own PAN; ask for the GST certificate", {"type": "computed", "field": "PAN 4th character"})
             else:
                 self.flag("red", f"GSTIN {gstin} fails the format/checksum test, so it is not a real GST number",
                           {"type": "computed", "field": "GSTIN check digit"})
