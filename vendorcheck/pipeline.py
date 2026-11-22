@@ -207,9 +207,11 @@ class Job:
         for page in first_list(resp):
             if not page.get("success"):
                 continue
-            text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page.get("content") or ""))
+            html = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", page.get("content") or "")
+            text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))
             low = text.lower()
-            if all(t.lower() in low for t in must_terms):
+            # visible text only, whole words only: "tci" must not match inside "WTci8Xn" in a script blob
+            if all(re.search(r"(?<![a-z0-9])" + re.escape(t.lower()) + r"(?![a-z0-9])", low) for t in must_terms):
                 i = low.find(must_terms[0].lower())
                 out[page.get("url")] = {"passage": text[max(0, i - 120): i + 160].strip(), "retrieved_at": meta["retrieved_at"], "title": page.get("title")}
         return out
@@ -251,7 +253,7 @@ class Job:
             terms = [t for t in ADVERSE_TERMS if re.search(r"\b" + re.escape(t) + r"\b", blob)]
             if not terms:
                 continue
-            if all(t.lower() in blob for t in must_terms):
+            if all(re.search(r"(?<![a-z0-9])" + re.escape(t.lower()) + r"(?![a-z0-9])", blob) for t in must_terms):
                 cand.append({"url": r.get("url"), "terms": terms, "title": r.get("title"), "date": r.get("metadata")})
             else:
                 # data minimisation: about a different person, so keep no name, link or passage, only why it was cleared
@@ -447,9 +449,10 @@ class Job:
 
         # ---- adverse media: company
         short = " ".join(norm_tokens(legal)) or legal
-        adv = self.step("adverse_company", lambda: self.s_adverse(f"\"{short}\" raid OR arrested OR FIR OR NCLT OR insolvency OR \"GST evasion\" OR \"money laundering\"", [short.split()[0]]))
+        adv = self.step("adverse_company", lambda: self.s_adverse(f"\"{short}\" raid OR arrested OR FIR OR NCLT OR insolvency OR \"GST evasion\" OR \"money laundering\"", [short]))
         for h in adv["hits"][:3]:
-            self.flag("red", f"Adverse media on the company: \"{h['title']}\" ({', '.join(h['terms'])})",
+            # the company is named in legal-action news, but its role (subject, victim, carrier, witness) is not established
+            self.flag("amber", f"News names {legal} in a legal-action report ({', '.join(h['terms'])}); a person should judge whether the company is the subject: \"{h['title']}\"",
                       {"type": "web", "url": h["url"], "field": "article text", "passage": h["passage"], "record_date": h.get("date")})
         if adv.get("possible"):
             self.flag("amber", f"{len(adv['possible'])} possible adverse result(s) for the company could not be retrieved to confirm; a person should review",
@@ -464,7 +467,7 @@ class Job:
             if all(name_similarity(l["name"], s["name"]) < 0.6 for s in subjects):
                 subjects.append(l)
         for i, l in enumerate(subjects[:CONFIG["max_people_screened"]]):
-            a = self.step(f"adverse_person_{i}", lambda l=l: self.s_adverse(f"\"{l['name']}\" arrested OR FIR OR raid OR \"fraud case\" OR \"money laundering\"", [l["name"].split()[-1], short.split()[0]]))
+            a = self.step(f"adverse_person_{i}", lambda l=l: self.s_adverse(f"\"{l['name']}\" arrested OR FIR OR raid OR \"fraud case\" OR \"money laundering\"", [l["name"].split()[-1], short]))
             for h in a["hits"][:2]:
                 self.flag("red", f"Adverse media naming {l['name']} together with {legal}: \"{h['title']}\"",
                           {"type": "web", "url": h["url"], "field": "article text", "passage": h["passage"], "record_date": h.get("date")})

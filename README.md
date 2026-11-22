@@ -43,7 +43,7 @@ HTTP API (for another system to call; send `authorization: Bearer <session token
 |---|---|---|---|
 | 1 | Shadowfax invoice, clean | Pay after approval | `AWAITING_APPROVAL` → approved → `PAID` once |
 | 2 | Shreeji Cargo Movers (fictitious front company) | Hold | `HELD`: no company record carries the domain; cannot verify |
-| 3 | TCI Express invoice; director "Anil Kumar" (very common name) | Pay, namesakes cleared | `AWAITING_APPROVAL`; 6 adverse articles about other people named Anil Kumar cleared with the reason "does not mention TCI Express" |
+| 3 | TCI Express invoice; director "Anil Kumar" (very common name) | Namesakes cleared | Results about other people named Anil Kumar are cleared ("does not name TCI Express"). The verdict depends on live news: one run returned a report of a police raid at a TCI Express courier warehouse, where the company was the carrier. The service then **holds** the invoice with the exact passage cited and asks a person to judge the company's role, instead of guessing either way. |
 | 4 | Shadowfax invoice re-sent as `INV-2026-451` (was `INV/2026/0451`) | Duplicate | `DUPLICATE` of `V001:2026-451` |
 | 5 | "We have changed our bank" email | Hold, verify out of band | `HELD` + drafted call-back message to the contact on file (never to the sender) |
 | 6 | TCI invoice asking for payment to a new account | Hold | `HELD`: account differs from verified account; PO already invoiced |
