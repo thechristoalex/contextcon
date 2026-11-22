@@ -138,8 +138,8 @@ flowchart LR
 ## How we tested it
 
 - **Live runs** with Crustdata on 22 Nov 2026 produced the results tables above.
-- **Offline tests:** 17 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
-  - `tests/test_payables.py` (8 tests):
+- **Offline tests:** 18 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
+  - `tests/test_payables.py` (9 tests):
     - every inbox outcome
     - re-running the inbox changes nothing
     - a bank-change email is held with a drafted call-back
@@ -148,6 +148,7 @@ flowchart LR
     - a vendor record changed after approval holds the payment
     - a changed vendor record is checked again
     - a source outage holds the invoice instead of passing it
+    - unusual layouts ("Bill No", no amount, an unreadable memo) are held, never filed or guessed
   - `tests/test_bank.py` (9 tests):
     - the example statement, end to end
     - the legal-name citation and its rules
