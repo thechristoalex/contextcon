@@ -47,3 +47,7 @@
 .zpreview.txt{white-space:pre-wrap;font:12px/1.5 var(--mono);padding:12px;height:auto;max-height:420px;overflow:auto}
 @media (max-width:900px){.zlist.split{grid-template-columns:1fr}.zlist.split .l{display:none}.zgrid{grid-template-columns:1fr}}
 @media (prefers-color-scheme:dark){.zmodal{background:rgba(0,0,0,.55)}}
+.zsub{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 16px;overflow-x:auto}
+.zsub a{padding:8px 12px;color:var(--fg-2);font-weight:500;cursor:pointer;white-space:nowrap;position:relative}
+.zsub a:hover{color:var(--fg)}
+.zsub a.on{color:var(--fg)}.zsub a.on:after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--blue);border-radius:2px}

@@ -289,7 +289,7 @@ def check_bank(x, v):
     return chk("bank_details", "pass", "Bank account matches the verified account on file", ev)
 
 
-PAN_TYPES = {"C": "company", "F": "firm / LLP", "P": "individual (proprietor)", "H": "HUF", "T": "trust", "A": "AOP", "B": "BOI", "G": "government", "L": "local authority", "J": "artificial juridical person"}
+PAN_TYPES = pipeline.PAN_TYPES  # one table for the whole app
 
 
 def check_gstin(x, v):
@@ -311,17 +311,23 @@ def check_gstin(x, v):
     return chk("gstin_binding", "pass", f"GSTIN valid, PAN type {PAN_TYPES.get(ptype)}, state {pipeline.GST_STATES.get(g[:2])}, matches vendor record", ev)
 
 
+TRUST_CHECK_VERSION = 2  # 2: the GSTIN is looked up on public pages and its PAN holder type is reported
+
+
 def trust_job_id(v):
     """The cached vendor verdict is keyed by the facts it checked. If the vendor record's name, domain,
-    director or GSTIN changes, the key changes and the vendor is checked again instead of reusing an old CLEAR."""
-    keep = {k: v.get(k) for k in ("legal_name", "domain", "director", "gstin")}
+    director or GSTIN changes, the key changes and the vendor is checked again instead of reusing an old CLEAR.
+    Bumping TRUST_CHECK_VERSION re-checks every vendor once when the check itself gains a step; replayed API
+    calls come from the response cache, so only the new step is billed."""
+    keep = {k: v.get(k) for k in ("legal_name", "domain", "director", "gstin")} | {"check_version": TRUST_CHECK_VERSION}
     return f"trust:{v['vendor_id']}:" + hashlib.sha256(json.dumps(keep, sort_keys=True).encode()).hexdigest()[:8]
 
 
 def check_trust(v):
     """Vendor check (5.1 + 5.2) on live data, cached per vendor record."""
+    # the vendor master's GSTIN (not the bill's: check_gstin compares those) so the GSTIN is checked against public pages
     req = {"vendor_name": v["legal_name"], "website": v.get("domain"), "director": v.get("director"),
-           "request_id": trust_job_id(v)}
+           "gstin": v.get("gstin"), "request_id": trust_job_id(v)}
     try:
         rep = pipeline.run_request(req)
     except (crust.ApiError, OSError, TimeoutError, RuntimeError) as e:
@@ -334,6 +340,70 @@ def check_trust(v):
     reasons = "; ".join(f["reason"] for f in rep["flags"])
     red = any(f["severity"] == "red" for f in rep["flags"])
     return chk("vendor_trust", "fail" if red else "warn", reasons, ev, weight=60 if red else 20), rep
+
+
+# ---------------- bills from senders not on file: who is this business? ----------------
+
+FREE_MAIL = {"gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "outlook.com", "hotmail.com", "live.com",
+             "rediffmail.com", "icloud.com", "proton.me", "protonmail.com"}
+
+
+def bill_request(x):
+    """A vendor-check request built only from what the bill says about its sender. None if there is no name or
+    company domain to look up. The id depends on the business, not the invoice, so a second bill reuses the report."""
+    name = (x.get("vendor_name_text") or x.get("account_name") or "").strip() or None
+    domain = x.get("sender_domain")
+    domain = None if not domain or domain in FREE_MAIL else domain
+    if not name and not domain:
+        return None
+    gstin = x.get("gstin")
+    rid = hashlib.sha256(f"{name}|{domain}|{gstin}".lower().encode()).hexdigest()[:12]
+    return {"vendor_name": name, "website": domain, "gstin": gstin, "request_id": f"bill:{rid}"}
+
+
+def _gstin_only_check(g):
+    """No name or company domain to look up, but a GSTIN: report what the number itself proves, with no API call."""
+    p = pipeline.gstin_profile(g)
+    src = "GSTIN on the bill"
+    ev = [{"source": src, "field": "GSTIN", "value": p["gstin"]}]
+    if not p["valid"]:
+        return chk("background_check", "fail", f"No business name or company email to look up, and the GSTIN {g} fails the check-character test: not a real GST number", ev, weight=60)
+    ev += [{"source": src, "field": "state", "value": p["state"] or f"unknown code {p['state_code']}"},
+           {"source": src, "field": "PAN", "value": p["pan"]},
+           {"source": src, "field": "PAN holder type", "value": p["pan_type"] or "unknown"}]
+    return chk("background_check", "info", f"No business name or company email to look up. The GSTIN is well-formed: registered in "
+               f"{p['state'] or 'an unknown state'}, PAN {p['pan']} held by {('an ' if (p['pan_type'] or '')[:1] in 'aeiou' else 'a ') + (p['pan_type'] or 'unknown holder type')}", ev)
+
+
+def check_unknown_vendor(x):
+    """Run the vendor check on a business that is not on file. Returns (checks, report).
+    It informs the person who reviews the bill. It never makes the bill payable: an unknown vendor stays held."""
+    req = bill_request(x)
+    if not req:
+        if x.get("gstin"):
+            return [_gstin_only_check(x["gstin"])], None
+        return [chk("background_check", "info", "Nothing to look up: the bill names no business, company email domain or GSTIN")], None
+    try:
+        rep = pipeline.run_request(req)
+    except Exception as e:  # any failure holds the bill; it never stops the inbox
+        return [chk("background_check", "unavailable", f"Background check on {req['vendor_name'] or req['website']} could not run: {e}. "
+                    "Not the same as 'no record'; held until it can be checked", weight=50)], None
+    ev = [{"claim": f["claim"], "value": f["value"], "source": f["source"]} for f in rep["facts"]]
+    who = (rep.get("entity") or {}).get("name") or req["vendor_name"] or req["website"]
+    if rep["verdict"] == "CLEAR":
+        out = [chk("background_check", "warn", f"{who} appears to be a real, active company ({rep['summary']}), but it is not a vendor on file. "
+                   "Add it to the vendor master before paying", ev)]
+    else:
+        why = "; ".join([f["reason"] for f in rep["flags"]] + rep["cannot_verify"]) or rep["summary"]
+        out = [chk("background_check", "fail", f"Background check on {who}: {rep['verdict'].replace('_', ' ').lower()}. {why}", ev, weight=20)]
+    legal = (rep.get("entity") or {}).get("name")
+    if legal and x.get("account_name"):
+        aev = [{"source": "invoice", "field": "account name", "value": x["account_name"]}, {"source": "background check", "field": "legal name", "value": legal}]
+        if pipeline.norm_tokens(x["account_name"]) == pipeline.norm_tokens(legal):
+            out.append(chk("account_name", "pass", f"Bank account name '{x['account_name']}' matches {legal}, the company the background check found", aev))
+        else:
+            out.append(chk("account_name", "warn", f"Bank account name '{x['account_name']}' is not {legal}, the company the background check found", aev, weight=15))
+    return out, rep
 
 
 def check_business(job_id, x, v):
@@ -408,8 +478,9 @@ def process_file(path, text=None):
 
     v, how = identify_vendor(x, vmap)
     if not v:
-        outcome = _finish(path, chash, None, "unknown", x, "held", checks + document_signals(jr, x, None) + [chk("vendor_identified", "fail", "No vendor on record matches the GSTIN, sender domain or name", weight=80)])
-        return outcome
+        bg, report = check_unknown_vendor(x)
+        return _finish(path, chash, None, "unknown", x, "held", checks + document_signals(jr, x, None) +
+                       [chk("vendor_identified", "fail", "No vendor on record matches the GSTIN, sender domain or name", weight=80)] + bg, trust=report)
     checks.append(chk("vendor_identified", "pass", f"{v['legal_name']} ({v['vendor_id']}) matched by {how}", [{"source": "vendor master", "field": how, "value": v.get(how if how != 'name' else 'legal_name')}]))
     checks += document_signals(jr, x, v)
 
@@ -467,10 +538,11 @@ def _finish(path, chash, key, vendor_id, x, state, checks, draft=None, duplicate
     decision = {"state": state, "reason": reason, "checks": checks, **score, "draft_message": draft, "duplicate_of": duplicate_of,
                 "trust_report": trust, "cost_credits": trust["cost"]["credits"] if trust else 0}
     now = time.time()
+    key = key or f"unknown:{chash}"  # the key it is stored under, so the app can open the case
     with store._lock:
         store.db().execute("""INSERT INTO invoices(invoice_key, source_file, doc_type, vendor_id, extracted_json, state, decision_json, created_at, updated_at)
                               VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(invoice_key) DO NOTHING""",
-                           (key or f"unknown:{chash}", path, x["doc_type"], vendor_id, json.dumps(x), state, json.dumps(decision), now, now))
+                           (key, path, x["doc_type"], vendor_id, json.dumps(x), state, json.dumps(decision), now, now))
         store.db().execute("INSERT OR REPLACE INTO files_seen VALUES (?,?,?,?,?)", (path, chash, key, state, now))
     store.log(f"inv:{os.path.basename(path)}", f"{state.upper()}: {reason[:160]}")
     if state == "awaiting_approval" and x.get("amount_inr") and x["amount_inr"] <= CONFIG.get("auto_approve_below_inr", 0):

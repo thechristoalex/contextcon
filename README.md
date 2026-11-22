@@ -74,7 +74,7 @@ Each bank line is posted once. A line's key is its date, description, amount and
 
 ### Scanning a paper bill
 
-In the app, **Inbox → Scan a bill** opens the camera: hold the bill in frame and press Capture, or use **Upload / take photo** (on a phone this opens the camera). From the command line: `python3 -m vendorcheck.cli scan path/to/bill.jpg`.
+In the app, **Scan a bill** (on the Dashboard and the Inbox) opens the camera: hold the bill in frame and press Capture, or use **Upload / take photo** (on a phone this opens the camera). From the command line: `python3 -m vendorcheck.cli scan path/to/bill.jpg`.
 
 - **Read on this machine, for ₹0.** Apple Vision on a Mac (compiled once from `vendorcheck/vision_ocr.swift`), Tesseract elsewhere. The photo and the bank details on it never leave the laptop. We ruled out free cloud tiers whose terms let the provider read or train on uploads.
 - **Same checks as an emailed invoice.** The rows read from the photo become an inbox document, so duplicates, three-way match, bank and GSTIN checks, the vendor check and pay-once all apply. The only change: a paper bill has no sender, so the sender-domain check reads "not applicable".
@@ -82,7 +82,7 @@ In the app, **Inbox → Scan a bill** opens the camera: hold the bill in frame a
 - **Never guessed.** A bill whose invoice number, amount, or GSTIN and vendor name cannot be read is held as "cannot read". A field read below `min_read_confidence` (Settings, default 0.5) holds the bill for a person to compare. A GSTIN that fails its check character is reported as "misread or not real", not as fake. A rupee sign misread as another currency sign is corrected only when it sits directly before a number.
 - **Read once.** Files are keyed by the photo's hash: the same photo again is answered from its stored reading, and a second photo of the same bill ends as `DUPLICATE`.
 
-Tests: `python3 -m unittest tests.test_scan -v` (13 run anywhere with a fake reader; 2 use the real reader on the test photos in `data/fixtures/bills/`, made by `tests/make_bills.swift`).
+Tests: `python3 -m unittest tests.test_scan -v` (15 run anywhere with a fake reader; 2 use the real reader on the test photos in `data/fixtures/bills/`, made by `tests/make_bills.swift`).
 
 ## Procurement services (Zoho Procurement flow)
 
@@ -180,12 +180,20 @@ flowchart LR
 - **Source failures.** Up to 3 retries with backoff, honouring `x-ratelimit-reset` on 429. If a source is still down, the check is marked `unavailable` ("source unavailable, not the same as no record") and the invoice is held. `Replay checks` (UI) or `POST /api/recheck` re-runs it later.
 - **Limits.** Cost limit per job (`MAX_CREDITS_PER_JOB`, default 12 credits) and time limit (`MAX_SECONDS_PER_JOB`, default 180 s). Hitting either gives `CANNOT_VERIFY`, never a guess.
 - **Deterministic.** Extraction and verdicts are rules. Jev (below) answers typed questions inside those rules, pinned to `jev-1.14.0` and cached by request hash, so a re-run gives the same answers and the same verdict. If Jev is off or down, each check falls back to its rule and says so.
-- **Vendor verdicts follow the vendor record.** A vendor's check result is reused across its invoices, but it is keyed by the facts it checked: legal name, domain, director and GSTIN. If any of them changes on the vendor master, the vendor is checked again instead of reusing an old `CLEAR`.
+- **Vendor verdicts follow the vendor record.** A vendor's check result is reused across its invoices, but it is keyed by the facts it checked: legal name, domain, director and GSTIN. If any of them changes on the vendor master, the vendor is checked again instead of reusing an old `CLEAR`. The vendor master's GSTIN is also looked up on public pages.
+- **Bills from senders not on file get a background check.** A bill whose vendor is not on file runs the same vendor check on what the bill says about itself:
+  - the business name, or else the bank account name;
+  - the company email domain (never gmail, yahoo, outlook or another free-mail domain);
+  - the GSTIN.
+
+  The bill stays held, because an unknown vendor is never paid. A clear result reads "real company, but not a vendor on file: add it to the vendor master before paying"; any other result counts against the bill. The bank account name is compared with the legal name found. A bill with only a GSTIN gets what the number proves (state, PAN, PAN holder type) with no API call. The lookup is keyed by the business, not the invoice, so a second bill from the same business reuses it. Live, a Delhivery bill cost 8.2 credits (₹205): public company, founded 2011, about 35,300 employees, site live and naming the company, and 7 namesake adverse results correctly cleared.
+- **GSTIN facts at no cost.** The PAN inside a GSTIN says what kind of holder it is: C company, F firm or LLP, P individual, and so on. A name that says Limited or LLP on a PAN of another kind is flagged ("a company bills under its own PAN"). The GST state is reported as a fact but never compared with an address, because head offices often sit in another state.
+- **A site that only answers on www is not "down".** If a website fails to load, the same host is tried once with or without `www.` (delhivery.com only has a certificate for www.delhivery.com). If both fail, the flag states the error.
 
 ## How we tested it
 
 - **Live runs** with Crustdata on 22 Nov 2026 produced the results tables above.
-- **Offline tests:** 18 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
+- **Offline tests:** 55 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
   - `tests/test_payables.py` (9 tests):
     - every inbox outcome
     - re-running the inbox changes nothing
@@ -202,6 +210,15 @@ flowchart LR
     - re-running the file, and re-uploading it under another name
     - reconciling a transfer to exactly one payment
     - a source outage, the cost limit and the cost report
+  - `tests/test_scan.py` (17 tests): reading bill photos, rows and the rupee-sign fixes; 2 use the real reader
+  - `tests/test_background.py` (20 tests):
+    - PAN holder type and the company-name rule
+    - every background-check outcome for an unknown sender
+    - free mail, nothing to look up, GSTIN only
+    - lookup errors held, and Replay after an outage
+    - one lookup per business
+    - account name vs legal name
+    - the www fallback for websites
 
 ## Cost per job and price
 

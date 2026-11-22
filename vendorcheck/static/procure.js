@@ -39,6 +39,8 @@ const kv=(k,v)=>`<div class="zkv"><span class="k">${esc(k)}</span><span class="v
 const checks=cs=>(cs||[]).length?cs.map(c=>`<div class="zchk">${ICON[R[c.result]||'none']}<span class="f2">${esc(nice(c.name))}</span><span>${esc(c.reason)}</span></div>`).join(''):'<div class="f3">No checks run yet.</div>';
 const history=h=>(h||[]).length?`<div class="ztl">${h.map(x=>{let d={};try{d=JSON.parse(x.detail||'{}')}catch(e){}
   return `<div><b>${esc(nice(x.action))}</b>${x.to_status?` → ${ZS(x.to_status)}`:''} <span class="f3">· ${tsf(x.at)}${d.by?' · '+esc(d.by):''}${d.reason?' · '+esc(d.reason):''}</span></div>`}).join('')}</div>`:'<div class="f3">No history.</div>';
+const SUB=[['onboard','Vendors'],['docs','Uploaded Invoices'],['bills','Bills'],['pmade','Payments Made']];
+const subnav=id=>`<div class="zsub">${SUB.map(([k,t])=>`<a class="${k===id?'on':''}" onclick="go('${k}')">${t}</a>`).join('')}</div>`;
 const sec=t=>`<div class="sec"><span class="lbl">${esc(t)}</span></div>`;
 
 function shell(key,{views,newBtn='',list,detail}){
@@ -54,14 +56,14 @@ function wireClose(key){$('#zd [data-close]')?.addEventListener('click',()=>{STA
 
 /* ================= Vendors (onboarding) ================= */
 async function onboard(){
-  topbar('Vendors',{acts:''});const S=STATE.onboard;V.innerHTML=skel(5);
+  topbar('Vendors',{crumb:'Procurement'});const S=STATE.onboard;V.innerHTML=skel(5);
   const [list,master]=await Promise.all([papi('/api/procure/vendors'+(S.f&&S.f!=='master'?'?status='+S.f:'')),papi('/api/vendors')]);
   const fixed=master.filter(v=>!v.onboarded).map(v=>({vendor_id:v.vendor_id,display_name:v.legal_name,legal_name:v.legal_name,email:v.contact?.email,gstin:v.gstin,status:'active',fixture:true,failed_checks:0}));
   const rows=S.f==='master'?fixed:S.f===''?[...list,...fixed]:S.f==='active'?[...list,...fixed]:list;
   const views=[['','All Vendors'],['active','Active Vendors'],['invited','Invited Vendors'],['approval_pending','Submitted Vendors (Approval Pending)'],['pending_review','Pending Review'],['rejected','Rejected Vendors'],['inactive','Inactive Vendors'],['master','Vendor master file']];
   const tbl=`<table class="tbl t-vend"><thead><tr><th>Name</th><th>Email</th><th>GSTIN</th><th>Status</th><th class="r">Checks</th></tr></thead><tbody>
     ${rows.map((v,i)=>`<tr class="click rowin ${S.sel===v.vendor_id?'sel':''}" style="animation-delay:${i*15}ms" ${v.fixture?'':`data-id="${esc(v.vendor_id)}"`}><td><b>${esc(v.legal_name||v.display_name)}</b><div class="f3 mono">${esc(v.vendor_id)}${v.fixture?' · vendor master file':''}</div></td><td class="f2">${esc(v.email||'—')}</td><td class="mono">${esc(v.gstin||'—')}</td><td>${ZS(v.status)}</td><td class="r">${v.failed_checks?pill('fail',v.failed_checks+' failed'):v.checks_run?pill('pass','passed'):'<span class="f3">—</span>'}</td></tr>`).join('')||`<tr><td colspan="5"><div class="empty"><b>No vendors in this view</b>Invite a vendor: they fill in their own business, address and bank details in the vendor portal.</div></td></tr>`}</tbody></table>`;
-  V.innerHTML=shell('onboard',{views,list:tbl,newBtn:`<button class="btn primary" id="vinv">+ Invite Vendor</button><button class="btn" id="vnew">New Vendor</button>`});
+  V.innerHTML=subnav('onboard')+shell('onboard',{views,list:tbl,newBtn:`<button class="btn primary" id="vinv">+ Invite Vendor</button><button class="btn" id="vnew">New Vendor</button>`});
   $('#vinv').onclick=async()=>{const f=await modal('Invite Vendor',`<div class="zinfo">The vendor gets a portal link, signs up and submits their organisation details for your approval.</div>
      <label>Display Name*<input name="display_name" placeholder="e.g. Konkan Freight"></label><label>Email Address*<input name="email" type="email" placeholder="accounts@vendor.in"></label>`,'Send Invite');
     if(!f)return;try{const v=await papi('/api/procure/vendors/invite',f);S.sel=v.vendor_id;S.f='';toast('Invitation created. Portal link copied.');navigator.clipboard?.writeText(location.origin+v.portal_link).catch(()=>{});onboard()}catch(e){toast(esc(e.message),'err')}};
@@ -96,12 +98,12 @@ async function vendorDetail(id){
 
 /* ================= Inbox: uploaded invoices ================= */
 async function docs(){
-  topbar('Inbox',{crumb:'Payables'});const S=STATE.docs;V.innerHTML=skel(5);
+  topbar('Uploaded Invoices',{crumb:'Procurement'});const S=STATE.docs;V.innerHTML=skel(5);
   const list=await papi('/api/procure/documents'+(S.f?'?status='+S.f:''));
   const views=[['','All Documents'],['pending','Pending Documents'],['accepted','Accepted Documents'],['rejected','Rejected Documents']];
   const tbl=`<table class="tbl t-docs"><thead><tr><th>Document Name</th><th>Uploaded by</th><th>Invoice#</th><th class="r">Amount</th><th>Invoice UUID</th><th>Status</th></tr></thead><tbody>
    ${list.map((x,i)=>{const f=x.checks.filter(c=>c.result==='fail').length;return `<tr class="click rowin ${S.sel===x.doc_uuid?'sel':''}" style="animation-delay:${i*15}ms" data-id="${esc(x.doc_uuid)}"><td><b>${esc(x.file_name)}</b><div class="f3">${esc(x.vendor_name||x.vendor_id)} · ${ago(x.created_at)}</div></td><td class="f2">${esc(x.uploaded_by)}</td><td class="mono">${esc(x.extracted.invoice_no||'—')}</td><td class="r mono num">${inr(x.extracted.amount_inr)}</td><td>${uuidTag(x.invoice_uuid)}</td><td>${ZS(x.status)}${f&&x.status==='pending'?' '+pill('fail',f+' failed'):''}</td></tr>`}).join('')||`<tr><td colspan="6"><div class="empty"><b>No documents here</b>Vendors upload invoices from the vendor portal; you can also upload one on a vendor's behalf.</div></td></tr>`}</tbody></table>`;
-  V.innerHTML=`<p class="f2" style="margin:0 0 12px">Invoices uploaded by vendors. Every upload gets its own <b>document UUID</b>. Every invoice gets a fixed <b>invoice UUID</b>, built from the vendor and the normalised invoice number. A resent invoice (INV/2026/0451 vs INV-2026-451) therefore lands on the same UUID and can never become a second bill.</p>`+shell('docs',{views,list:tbl,newBtn:`<button class="btn primary" id="dup">Upload Bills</button>`});
+  V.innerHTML=subnav('docs')+`<p class="f2" style="margin:0 0 12px">Invoices uploaded by vendors. Every upload gets its own <b>document UUID</b>. Every invoice gets a fixed <b>invoice UUID</b>, built from the vendor and the normalised invoice number. A resent invoice (INV/2026/0451 vs INV-2026-451) therefore lands on the same UUID and can never become a second bill.</p>`+shell('docs',{views,list:tbl,newBtn:`<button class="btn primary" id="dup">Upload Bills</button>`});
   $('#dup').onclick=uploadForOrg;wireList('docs',docs,docDetail);bindCopy(V);
 }
 async function readFile(file){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file)})}
@@ -132,12 +134,12 @@ async function docDetail(id){
 
 /* ================= Bills ================= */
 async function bills(){
-  topbar('Bills',{crumb:'Payables'});const S=STATE.bills;V.innerHTML=skel(5);
+  topbar('Bills',{crumb:'Procurement'});const S=STATE.bills;V.innerHTML=skel(5);
   const list=await papi('/api/procure/bills'+(S.f?'?status='+S.f:''));
   const views=[['','All Bills'],['pending_approval','Pending Approval'],['open','Open'],['overdue','Overdue'],['partially_paid','Partially Paid'],['paid','Paid'],['void','Void']];
   const tbl=`<table class="tbl t-bills"><thead><tr><th>Date</th><th>Bill#</th><th>Vendor</th><th>Status</th><th>Due Date</th><th class="r">Amount</th><th class="r">Balance Due</th></tr></thead><tbody>
    ${list.map((b,i)=>`<tr class="click rowin ${S.sel===b.bill_uuid?'sel':''}" style="animation-delay:${i*15}ms" data-id="${esc(b.bill_uuid)}"><td class="f2">${esc(b.bill_date||'—')}</td><td class="mono">${esc(b.bill_no)}</td><td>${esc(b.vendor_name||b.vendor_id)}</td><td>${ZS(b.display_status)}</td><td class="f2">${esc(b.due_date||'—')}</td><td class="r mono num">${inr(b.amount)}</td><td class="r mono num">${inr(b.balance)}</td></tr>`).join('')||`<tr><td colspan="7"><div class="empty"><b>No bills</b>Bills are created by converting an uploaded invoice in the Inbox.</div></td></tr>`}</tbody></table>`;
-  V.innerHTML=shell('bills',{views,list:tbl,newBtn:`<button class="btn" onclick="go('docs')">Go to Inbox</button>`});wireList('bills',bills,billDetail);
+  V.innerHTML=subnav('bills')+shell('bills',{views,list:tbl,newBtn:`<button class="btn" onclick="go('docs')">Go to Inbox</button>`});wireList('bills',bills,billDetail);
 }
 async function billDetail(id){
   const d=$('#zd');d.innerHTML='<div class="zbody">'+skel(4)+'</div>';const b=await papi('/api/procure/bills/'+encodeURIComponent(id));const A=b.allowed_actions;
@@ -161,12 +163,12 @@ async function billDetail(id){
 /* ================= Payments Made ================= */
 async function pmade(pre){
   if(pre&&pre.vendor_id)return paymentForm(pre);
-  topbar('Payments Made',{crumb:'Payables'});const S=STATE.pmade;V.innerHTML=skel(5);
+  topbar('Payments Made',{crumb:'Procurement'});const S=STATE.pmade;V.innerHTML=skel(5);
   const list=await papi('/api/procure/payments'+(S.f?'?status='+S.f:''));
   const views=[['','All Payments'],['draft','Draft'],['pending_approval','Pending Approval'],['processing','Processing'],['paid','Paid'],['rejected','Rejected'],['void','Void']];
   const tbl=`<table class="tbl t-pay"><thead><tr><th>Date</th><th>Payment#</th><th>Vendor</th><th>Bills</th><th>Mode</th><th>Status</th><th class="r">Amount</th></tr></thead><tbody>
    ${list.map((p,i)=>`<tr class="click rowin ${S.sel===p.payment_id?'sel':''}" style="animation-delay:${i*15}ms" data-id="${esc(p.payment_id)}"><td class="f2">${esc(p.payment_date)}</td><td class="mono">${esc(p.payment_no)}</td><td>${esc(p.vendor_name||p.vendor_id)}</td><td class="mono f2">${p.allocations.map(a=>esc(a.bill_no)).join(', ')}</td><td class="f2">${esc(p.mode)}</td><td>${ZS(p.status)}</td><td class="r mono num">${inr(p.amount)}</td></tr>`).join('')||`<tr><td colspan="7"><div class="empty"><b>No payments recorded</b>Record a payment against a vendor's open bills.</div></td></tr>`}</tbody></table>`;
-  V.innerHTML=`<p class="f2" style="margin:0 0 12px">Each payment carries an <b>Idempotency-Key</b>. A double-click, a retry or a crash cannot pay a bill twice: a repeated request returns the first answer, and the bank receives one transfer per payment.</p>`+shell('pmade',{views,list:tbl,newBtn:`<button class="btn primary" id="pnew">+ New</button>`});
+  V.innerHTML=subnav('pmade')+`<p class="f2" style="margin:0 0 12px">Each payment carries an <b>Idempotency-Key</b>. A double-click, a retry or a crash cannot pay a bill twice: a repeated request returns the first answer, and the bank receives one transfer per payment.</p>`+shell('pmade',{views,list:tbl,newBtn:`<button class="btn primary" id="pnew">+ New</button>`});
   $('#pnew').onclick=()=>paymentForm({});wireList('pmade',()=>pmade(),payDetail);
 }
 async function paymentForm(pre){
@@ -239,7 +241,6 @@ async function uploadForOrg(){
   catch(e){toast(esc(e.message),'err')}}
 
 window.PROC_VIEWS={onboard,docs,bills,pmade};
-window.PROC_SCREENS=[
- {g:'Purchases',id:'onboard',t:'Vendors',ic:'vend',k:'o'},
- {g:'Payables',id:'docs',t:'Uploaded Invoices',ic:'inbox',k:'u'},{g:'Payables',id:'bills',t:'Bills',ic:'led',k:'n'},{g:'Payables',id:'pmade',t:'Payments Made',ic:'bank',k:'m'}];
+window.PROC_SCREENS=[{id:'onboard',t:'Procurement',k:'o',tab:1},{id:'docs',t:'Uploaded Invoices',k:'u'},{id:'bills',t:'Bills',k:'n'},{id:'pmade',t:'Payments Made',k:'m'}];
+window.PROC_TABOF={onboard:'onboard',docs:'onboard',bills:'onboard',pmade:'onboard'};
 })();
