@@ -165,6 +165,7 @@ body.noscroll{overflow:hidden}
 .emp b{font-size:15px;font-weight:600}.emp small{color:var(--fg-3);font-size:12px;max-width:220px}.emp .btn{margin-top:8px}
 @media(max-width:1100px){.dg{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.dg{grid-template-columns:minmax(0,1fr)}.dc.s2{grid-column:auto}.dacts{margin-left:0}.drop{flex-wrap:wrap}.drop .go{margin-left:0}.dc.kp,.dc .ch,.feed2 .fi{padding-left:16px;padding-right:16px}.dc .cb{padding-left:16px;padding-right:16px}.dt th:first-child,.dt td:first-child{padding-left:16px}.dt th:last-child,.dt td:last-child{padding-right:16px}.dt td small{max-width:140px}}
+.chk>div>svg,.chk>div>span>svg{width:14px;height:14px;flex:none;margin-top:3px}
 </style>
 </head>
 <body>
@@ -570,8 +571,8 @@ async function caseView(key){
     <div class="rail">${d.checks.map(k=>`<details class="chk" ${k.result!=='pass'?'open':''}><summary><span class="dot">${ICON[k.result]||ICON.none}</span><span class="name">${esc(chkName(k.check))}</span><span class="why">${esc(k.reasoning)}</span>${(k.evidence||[]).length?`<span class="chev">›</span>`:''}</summary>
       ${(k.evidence||[]).length?`<div class="evi">${k.evidence.slice(0,14).map(ev).join('')}</div>`:''}</details>`).join('')}</div>
     ${t?`<div class="sec"><span class="lbl">Vendor check</span>${pill(vv,nice(t.verdict).toLowerCase())}<span class="f3">${t.screening.hits_found} news results · ${t.screening.hits_cleared} namesakes cleared · ${t.screening.hits_escalated} escalated</span></div>
-      ${t.flags.map(f=>`<div class="chk"><div style="display:flex;gap:10px"><span>${ICON[f.severity==='red'?'fail':'warn']}</span><span>${esc(f.reason)}${src(f.source)}</span></div></div>`).join('')}
-      ${t.cannot_verify.map(m=>`<div class="chk"><div style="display:flex;gap:10px"><span>${ICON.none}</span><span class="f2">Cannot verify: ${esc(m)}</span></div></div>`).join('')}`:''}
+      ${t.flags.map(f=>`<div class="chk"><div style="display:flex;gap:10px"><span class="st">${ICON[f.severity==='red'?'fail':'warn']}</span><span>${esc(f.reason)}${src(f.source)}</span></div></div>`).join('')}
+      ${t.cannot_verify.map(m=>`<div class="chk"><div style="display:flex;gap:10px"><span class="st">${ICON.none}</span><span class="f2">Cannot verify: ${esc(m)}</span></div></div>`).join('')}`:''}
     ${d.draft_message?`<div class="sec"><span class="lbl">Drafted message · not sent</span></div><div class="draft"><div class="f2">To <b>${esc(d.draft_message.to)}</b> · call back <span class="mono">${esc(d.draft_message.phone_to_call_back||'—')}</span></div><pre>${esc(d.draft_message.subject+'\n\n'+d.draft_message.body)}</pre><div class="f3" style="margin-top:8px">${esc(d.draft_message.note)}</div><div style="margin-top:10px"><span class="btn sm" data-copy="${esc(d.draft_message.subject+'\n\n'+d.draft_message.body)}">Copy draft</span></div></div>`:''}
     ${x.scan?`<div class="sec"><span class="lbl">Scanned bill</span><span class="f3">read by ${esc(nice(x.scan.reader))} on this machine in ${x.scan.read_ms} ms · ₹0 · <span class="mono">${esc(x.scan.photo)}</span></span></div>
     <div class="scangrid"><div class="scanph"><img id="ph" alt="Photo of the bill">${Object.entries(x.scan.fields).map(([k,f])=>f.boxes.map(b=>`<i title="${esc(nice(k))}" style="left:${b[0]*100}%;top:${b[1]*100}%;width:${b[2]*100}%;height:${b[3]*100}%"></i>`).join('')).join('')}</div>
@@ -671,15 +672,15 @@ async function vendorDrawer(id){const D=$('#drawer');D.innerHTML='<div class="db
 window.vendorDrawer=vendorDrawer;
 async function vcheck(pre){
   topbar('Vendors');
-  V.innerHTML=`<p class="f2" style="margin:0 0 16px">Is this a real, trading business, who runs it, how long has it existed, and is anything off. Live sources, every fact cited.</p>
+  V.innerHTML=`<p class="f2" style="margin:0 auto 16px">Is this a real, trading business, who runs it, how long has it existed, and is anything off. Live sources, every fact cited.</p>
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px"><input id="vn" placeholder="Vendor name" value="${esc(pre?.n||'')}" style="width:240px"><input id="vw" placeholder="Website" value="${esc(pre?.w||'')}" style="width:200px"><input id="vd" placeholder="Director (optional)" value="${esc(pre?.d||'')}" style="width:200px"><button class="btn primary" id="go">Run check</button></div><div id="out"></div>`;
   $('#go').onclick=e=>busy(e.currentTarget,'Checking live sources…',async()=>{$('#out').innerHTML=skel(5);
     try{const r=await api('/cases',{vendor_name:$('#vn').value,website:$('#vw').value,director:$('#vd').value});
     const k=r.verdict==='CLEAR'?'paid':r.verdict==='HOLD'?'held':'rejected';
     $('#out').innerHTML=`<div class="banner ${k}"><span class="st ${k}">${ICON[k]}</span><div><h2>${esc(nice(r.verdict).toLowerCase().replace(/^./,c=>c.toUpperCase()))}</h2><p>${esc(r.summary)}</p><p class="mono f3" style="margin-top:6px">${r.cost.credits} credits · ₹${r.cost.inr} · ${r.elapsed_s}s · ${r.screening.hits_cleared} namesakes cleared</p></div></div>
-     <div class="tblwrap"><table class="tbl"><thead><tr><th>Fact</th><th>Value</th><th>Source</th></tr></thead><tbody>${r.facts.map((f,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td>${esc(f.claim)}</td><td class="wrap">${esc(f.value)}</td><td class="wrap f3">${src(f.source)}</td></tr>`).join('')}</tbody></table></div>
-     ${r.flags.map(f=>`<div class="chk"><div style="display:flex;gap:10px">${ICON[f.severity==='red'?'fail':'warn']}<span>${esc(f.reason)}${src(f.source)}</span></div></div>`).join('')}
-     ${r.cannot_verify.map(m=>`<div class="chk"><div style="display:flex;gap:10px">${ICON.none}<span class="f2">Cannot verify: ${esc(m)}</span></div></div>`).join('')}`;
+     ${r.facts.length?`<div class="tblwrap"><table class="tbl"><thead><tr><th>Fact</th><th>Value</th><th>Source</th></tr></thead><tbody>${r.facts.map((f,i)=>`<tr class="rowin" style="animation-delay:${i*20}ms"><td>${esc(f.claim)}</td><td class="wrap">${esc(f.value)}</td><td class="wrap f3">${src(f.source)}</td></tr>`).join('')}</tbody></table></div>`:''}
+     ${r.flags.map(f=>`<div class="chk"><div style="display:flex;gap:10px"><span class="st">${ICON[f.severity==='red'?'fail':'warn']}</span><span>${esc(f.reason)}${src(f.source)}</span></div></div>`).join('')}
+     ${r.cannot_verify.map(m=>`<div class="chk"><div style="display:flex;gap:10px"><span class="st">${ICON.none}</span><span class="f2">Cannot verify: ${esc(m)}</span></div></div>`).join('')}`;
     toast(`Vendor check: ${esc(nice(r.verdict).toLowerCase())}`)}catch(err){$('#out').innerHTML='';throw err}});
   if(pre?.n)$('#go').click();
 }
