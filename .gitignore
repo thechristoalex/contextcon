@@ -20,3 +20,4 @@ data/fixtures/inbox/scan_*.txt
 .venv/
 data/services/
 docs/latex/*.log
+data/vendorcheck.backup.*.db
