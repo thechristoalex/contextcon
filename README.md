@@ -4,7 +4,7 @@ ContextCon 05, BITS Pilani · Team Humble Fumblers · Tracks **5. Trust and comp
 
 > **An accounts-payable agent that verifies every vendor against live records, pays every invoice exactly once, and holds anything it cannot prove with a cited reason.**
 
-`Python 3.10+, standard library only` · `109 offline tests, no keys, no credits` · `every fact cited to a source and a date` · `kill -9 safe at any instruction`
+`Python 3.10+, standard library only` · `119 offline tests, no keys, no credits` · `every fact cited to a source and a date` · `kill -9 safe at any instruction`
 
 An Indian mid-size 3PL pays hundreds of carriers, fleet owners and warehouses every month. The money leaks
 in three ways: an invoice paid twice because it was re-sent as `INV-2026-451` instead of `INV/2026/0451`;
@@ -120,8 +120,8 @@ Python 3.10+, standard library only. No `pip install`.
 
 ```bash
 git clone https://github.com/thechristoalex/contextcon && cd contextcon
-cp .env.example .env                           # CRUSTDATA_API_KEY=..., optional TYPESAFE_API_KEY=...
-python3 -m unittest discover tests             # 109 tests, offline, no keys, no credits
+cp .env.example .env                           # CRUSTDATA_API_KEY=..., optional TYPESAFE_API_KEY=..., GSTIN_API_KEY=...
+python3 -m unittest discover tests             # 119 tests, offline, no keys, no credits
 python3 -m vendorcheck.cli serve --port 8080   # landing at /, app at /app, vendor portal at /portal
 ```
 
@@ -133,6 +133,13 @@ python3 -m vendorcheck.cli scan path/to/bill.jpg                   # photo → l
 python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv
 python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
 ```
+
+**GST registry (optional).** The GST portal has no public API (its search is behind a captcha), so a GSTIN's
+registration is looked up through [gstin.cloud](https://gstin.cloud/dev-api/), which serves GSTN data: sign in
+with Google, generate a key (10 free credits, then about ₹0.10–0.20 a lookup) and set `GSTIN_API_KEY` in `.env`.
+An invoice then fails if its GSTIN is not registered, is cancelled or suspended, or is registered to another legal
+name, and the vendor check cites the registration. Answers are cached 7 days. Without a key, or when the lookup
+fails, the offline checks (check character, PAN type, vendor master) stand and the reason is shown.
 
 **Demo walkthrough:** [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md), the use case from the video step by step; `scripts/demo_reset.sh` restores a clean state.
 
@@ -171,6 +178,7 @@ Rebuild the LaTeX figures with `cd docs/latex && tectonic system.tex && tectonic
 | Crustdata | `POST /web/enrich/live` | Website liveness and content; fetching every page we cite |
 | Crustdata | `POST /web/search/live` | CIN, GSTIN, adverse media |
 | TypeSafe Jev | `POST /v1/systemone` | Typed decisions about text already held. Not a source |
+| gstin.cloud (GSTN data) | `GET /api/v1/verify/{GSTIN}` | GST registration: registered, Active/Cancelled, legal name, since when. Off without `GSTIN_API_KEY` |
 | Local | — | GSTIN check character, PAN holder type, state code, OCR |
 | Client | `data/fixtures/*.json` | Vendor master, POs, goods receipts, chart of accounts |
 
@@ -216,7 +224,7 @@ client gets its own database (`VENDORCHECK_DB`) and data folder (`VENDORCHECK_DA
 
 ## How we tested it
 
-- **109 offline tests** (`python3 -m unittest discover tests`). They need no key and no credits:
+- **119 offline tests** (`python3 -m unittest discover tests`). They need no key and no credits:
   `tests/offline.py` turns Jev off and drops its key before import, and Crustdata is replaced by canned
   responses. Each test runs on a fresh temporary database.
 
@@ -229,6 +237,7 @@ client gets its own database (`VENDORCHECK_DB`) and data folder (`VENDORCHECK_DA
   | `test_bank.py` | 9 | Statement end to end, legal-name rules, re-import, one-payment reconciliation, budget |
   | `test_procure.py` | 10 | Onboarding flow and front-company block, shared bank account, invoice-number formats, file re-upload, key replay/misuse, crash after transfer, 6 concurrent payments → 1 recorded, bank change before transfer |
   | `test_website.py` | 5 | Fetch fallback order and human_mode |
+  | `test_gstreg.py` | 10 | GST registry: active passes, cancelled / not registered / other name fail, cache, sandbox never decides, outage, no key = no call |
 
 - **Live runs** with Crustdata on 22 Nov 2026 produced the results tables above, including the Delhivery
   background check.
