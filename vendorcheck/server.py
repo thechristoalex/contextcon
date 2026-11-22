@@ -60,6 +60,7 @@ class H(BaseHTTPRequestHandler):
         b = open(path, "rb").read()
         self.send_response(200)
         self.send_header("content-type", "text/html; charset=utf-8")
+        self.send_header("cache-control", "no-cache")
         self.send_header("content-length", str(len(b)))
         self.end_headers()
         return self.wfile.write(b)

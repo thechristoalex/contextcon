@@ -56,18 +56,25 @@ class WebsiteTest(unittest.TestCase):
         self.assertTrue(w["ok"])
         self.assertGreaterEqual(len(w["text"]), 200)
         self.assertEqual(w["fetched_with"], "human_mode")
-        self.assertEqual(calls, [("https://delhivery.com", False), ("https://delhivery.com", True)])
+        self.assertEqual(calls, [("https://delhivery.com", False), ("https://www.delhivery.com", False), ("https://delhivery.com", True)])
 
-    def test_www_host_tried_last(self):
+    def test_www_twin_tried_before_browser_fetch(self):
+        # delhivery.com: certificate only valid for www., so the cheap www. retry fixes it without human_mode
+        w, calls = self.fetch({("https://www.delhivery.com", False): FULL})
+        self.assertTrue(w["ok"])
+        self.assertEqual((w["url"], w["fetched_with"]), ("https://www.delhivery.com", "standard"))
+        self.assertEqual(len(calls), 2)
+
+    def test_browser_fetch_on_www_tried_last(self):
         w, calls = self.fetch({("https://www.delhivery.com", True): FULL})
         self.assertTrue(w["ok"])
-        self.assertEqual(w["url"], "https://www.delhivery.com")
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 4)
 
     def test_site_that_never_loads_still_reports_failure(self):
         w, calls = self.fetch({("https://delhivery.com", False): SHELL})
         self.assertLess(len(w["text"]), 200)                 # the caller flags it; no guess that the site is fine
-        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(len(w["tried"]), 4)                 # every attempt is listed in the flag's reason
 
 
 if __name__ == "__main__":
