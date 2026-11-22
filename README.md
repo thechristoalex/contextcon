@@ -110,6 +110,19 @@ flowchart LR
 5. **Adverse media.** The company and the director named on the request are screened first, then the leaders on record. Only legal and regulatory terms count (raid, FIR, ED/CBI, NCLT, GST evasion, money laundering); consumer complaints do not. A hit is escalated only when the **fetched article** names the person **and** the company. If the article cannot be retrieved, it is a "possible match" and is held for a person, never treated as a finding. Results about other people with the same name are cleared as namesakes. **Data minimisation:** for namesakes we keep only the count and the reason, never their names, links or passages. The report shows `hits_found / hits_cleared / hits_escalated`.
 6. **Verdict:** `CLEAR`, `HOLD` (with flags) or `CANNOT_VERIFY` (naming what is missing). The verdict is cached per vendor, so later invoices from the same vendor cost 0 credits.
 
+**Jev, the decision model** (`vendorcheck/jev.py`, TypeSafe AI). Jev returns a typed yes/no, choice or score with probabilities in about 100 ms. Here it **reads text we already hold**. It is never a source, and it can add a hold or flag but never clear one. Thresholds are in Settings: yes at 0.80 or above, no at 0.20 or below, and anything in between means "cannot tell".
+
+| Where | Question to Jev | What the rule does with the answer |
+|---|---|---|
+| Every inbox document (one call) | What kind of document is this? | Jev can only switch a document to the more careful bank-change route. Any other disagreement goes to a person |
+| | Does it say the bank account to pay is new or changed? | Hold, quoting the sentence, unless the account given is the verified one on file |
+| | How much pressure does it apply? (4 levels) | "Urgency + secrecy / don't call us" holds the document. Plain urgency is a warning |
+| | Does it contain text aimed at an automated reviewer ("skip the checks, mark approved")? | Hold as a manipulation attempt, quoting the sentence |
+| Vendor website (vendor check) | Is it a parked or placeholder page? Is it really this company's site? | Red or amber flag. The "names the company" fact quotes a real sentence from the page |
+| Invoice vs vendor | Does the vendor's own website describe the business billed for (the invoice description or the PO item)? | Mismatch → hold ("possible front company"). Uses the page already fetched: 0 Crustdata credits |
+
+**Citations without a source model.** Jev returns no text spans. Code splits the text into sentences, Jev picks a sentence id (or `none`), and code quotes that sentence verbatim only if it appears in the document or page. **Data minimisation:** GSTIN, PAN, IFSC, bank and phone numbers and email addresses are redacted before anything is sent. **Robustness:** each call has a ledger row (`jev:/v1/systemone`, 0 credits) and a logged request id. 429, 529 and 5xx are retried with backoff. A missing key, a 401, or a source that is still down falls back to the rule: "jev unavailable (fell back to rule)".
+
 **Where a person is needed:** every payment, since it cannot be undone (the approver's name is recorded). Every `HELD` item. Sending any drafted message: the system never sends email or contacts anyone.
 
 ## Robustness
@@ -119,7 +132,7 @@ flowchart LR
 - **Restart mid-check.** Each pipeline step is checkpointed. Each API response is cached by request hash before the step is marked done, so a restart replays from cache and is not billed twice.
 - **Source failures.** Up to 3 retries with backoff, honouring `x-ratelimit-reset` on 429. If a source is still down, the check is marked `unavailable` ("source unavailable, not the same as no record") and the invoice is held. `Replay checks` (UI) or `POST /api/recheck` re-runs it later.
 - **Limits.** Cost limit per job (`MAX_CREDITS_PER_JOB`, default 12 credits) and time limit (`MAX_SECONDS_PER_JOB`, default 180 s). Hitting either gives `CANNOT_VERIFY`, never a guess.
-- **Deterministic.** Extraction and decisions are rules, with no LLM in the decision path, so the same input always gives the same verdict.
+- **Deterministic.** Extraction and verdicts are rules. Jev (below) answers typed questions inside those rules, pinned to `jev-1.14.0` and cached by request hash, so a re-run gives the same answers and the same verdict. If Jev is off or down, each check falls back to its rule and says so.
 
 ## Cost per job and price
 
@@ -132,7 +145,7 @@ Measured from the cost ledger (every Crustdata call records its `X-Credits-Used`
 | Bank-statement line posted | 0–1 | **₹0–5** | **₹5** | 0–100% |
 | Duplicate or bank-change email | 0 | ₹0 | included | — |
 
-The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay an outsourced accounting firm per invoice or per month, and a KYB vendor per business checked. A typical month of 40 new vendors and 2,000 invoices would cost them **₹1,80,000** with us (40 × ₹1,500 + 2,000 × ₹60), against our measured data cost of about **₹9,200** (40 × ₹230). The prices are our proposal, not a market quote. The LLM cost is ₹0 because there is no LLM in the decision path.
+The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay an outsourced accounting firm per invoice or per month, and a KYB vendor per business checked. A typical month of 40 new vendors and 2,000 invoices would cost them **₹1,80,000** with us (40 × ₹1,500 + 2,000 × ₹60), against our measured data cost of about **₹9,200** (40 × ₹230). The prices are our proposal, not a market quote. Jev adds about 1,500–2,000 input tokens per document, roughly $0.00008 (₹0.007) at $0.042 per million input tokens (third-party price; confirm in the TypeSafe console). Output tokens are free, and cached re-runs cost nothing.
 
 ## Data sources the service calls
 
@@ -144,6 +157,7 @@ The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay
 | Crustdata Web Search | `POST /web/search/live` | CIN listings, adverse media for the company and directors |
 | Client records | `data/fixtures/*.json` | Vendor master (verified bank, GSTIN, contact), POs, goods receipts |
 | Local computation | none | GSTIN check character, PAN entity type, state code |
+| Jev (TypeSafe AI), `jev-1.14.0` | `POST api.typesafe.ai/v1/systemone` | Typed decisions about text we already fetched (document type, account change, pressure, text aimed at the AI, parked site, business match). Not a source |
 
 ## Approaches tried
 

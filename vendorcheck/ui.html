@@ -82,7 +82,7 @@ async function vendors(){
 
 async function settings(){
   const s=await api('/api/settings');
-  const f=[['max_credits_per_job','Cost limit per job','credits'],['max_seconds_per_job','Time limit per job','seconds'],['auto_approve_below_inr','Auto-approve payments below','₹ (0 = every payment needs a person)'],['min_age_years','Flag companies younger than','years'],['min_headcount','Flag headcount below','people']];
+  const f=[['max_credits_per_job','Cost limit per job','credits'],['max_seconds_per_job','Time limit per job','seconds'],['auto_approve_below_inr','Auto-approve payments below','₹ (0 = every payment needs a person)'],['min_age_years','Flag companies younger than','years'],['min_headcount','Flag headcount below','people'],['jev_enabled','Jev decisions','true / false · off = rules only'],['jev_yes','Jev yes at or above','probability 0–1'],['jev_no','Jev no at or below','between the two = cannot tell, held for a person'],['jev_choice_min','Jev choice needs confidence','0–1'],['jev_score_min','Jev score level needs probability','0–1']];
   app.innerHTML=`<div class="toolbar"><h2 class="sec" style="margin:0">Settings</h2></div>
   <p class="muted" style="margin-top:-8px">Limits and rules for every run. Changes apply to the next job and are written to the activity log with your identity.</p>
   <div class="panel" style="max-width:640px">${f.map(([k,l,u])=>`<div style="display:grid;grid-template-columns:1fr 140px;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)"><div>${l}<div class="ev">${u}</div></div><input id="s_${k}" value="${esc(s[k])}"></div>`).join('')}
@@ -108,7 +108,8 @@ async function queue(){
 
 function srcLink(s){ if(!s)return ''; if(typeof s==='string')return esc(s);
   const u=s.url?`<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc((s.url||'').replace(/^https?:\/\/(www\.)?/,'').slice(0,56))}</a>`:esc(s.api||s.source||s.type||'');
-  return `${u}${s.field?` · <span class="mono">${esc(s.field)}</span>`:''}${s.record_date?` · record ${esc(s.record_date)}`:''}${s.retrieved_at?` · retrieved ${esc(s.retrieved_at)}`:''}${s.passage?`<div class="ev">“${esc(String(s.passage).slice(0,220))}”</div>`:''}`;}
+  return `${u}${s.field?` · <span class="mono">${esc(s.field)}</span>`:''}${s.record_date?` · record ${esc(s.record_date)}`:''}${s.retrieved_at?` · retrieved ${esc(s.retrieved_at)}`:''}${s.passage?`<div class="ev">“${esc(String(s.passage).slice(0,220))}”</div>`:''}${s.decided_by?jevTag(s.decided_by):''}`;}
+function jevTag(e){return `<div class="ev"><span class="jevtag" title="A decision about the text above, not a source">Jev</span>${esc(e.field)} → <b>${esc(e.value)}</b> <span class="mono">${esc((e.source||'').replace('Jev ',''))}${e.request_id?' · '+esc(e.request_id):''}${e.cache_hit?' · cached':''}</span></div>`;}
 
 async function caseView(key){
   const c=await api('/api/invoices/'+encodeURIComponent(key)); const d=c.decision, x=c.extracted, t=d.trust_report;
@@ -125,7 +126,7 @@ async function caseView(key){
    ${d.breakdown.map(b=>`<tr><td>${esc(b.signal.replace(/_/g,' '))}</td><td class="${b.result} mono small">${b.result}</td><td class="mono small">${b.weight}</td><td class="mono small">${b.contribution}</td></tr>`).join('')}</table></div>
   <div class="panel"><span class="lbl">Checks and evidence</span><table><tr><th>Check</th><th>Result</th><th>Reasoning and evidence</th></tr>
    ${d.checks.map(k=>`<tr><td>${esc(k.check.replace(/_/g,' '))}<div class="ev mono">${esc(k.fetched_at)}</div></td><td class="${k.result} mono small">${k.result}</td><td>${esc(k.reasoning)}
-   ${(k.evidence||[]).slice(0,12).map(e=>`<div class="ev">${e.claim?`<b>${esc(e.claim)}:</b> ${esc(e.value)} — `+srcLink(e.source):`${esc(e.source)} · ${esc(e.field)}: <span class="mono">${esc(e.value)}</span>`}</div>`).join('')}</td></tr>`).join('')}</table></div>
+   ${(k.evidence||[]).slice(0,12).map(e=>e.jev?jevTag(e):`<div class="ev">${e.claim?`<b>${esc(e.claim)}:</b> ${esc(e.value)} — `+srcLink(e.source):`${esc(e.source)} · ${esc(e.field)}: <span class="mono">${esc(e.value)}</span>`}</div>`).join('')}</td></tr>`).join('')}</table></div>
   ${t?`<div class="two" style="margin:0 0 32px"><div class="panel" style="margin:0"><span class="lbl">Vendor check · ${esc(t.verdict)}</span><p style="margin-top:0">${esc(t.summary)}</p>
    <span class="lbl">Adverse media screen</span><div class="mono small">found ${t.screening.hits_found} · cleared as namesakes ${t.screening.hits_cleared} · escalated ${t.screening.hits_escalated}</div>
    ${t.flags.length?`<span class="lbl" style="display:block;margin-top:14px">Flags</span>`+t.flags.map(f=>`<div class="${f.severity==='red'?'fail':'warn'}">● ${esc(f.reason)}</div><div class="ev">${srcLink(f.source)}</div>`).join(''):''}</div>
@@ -158,7 +159,8 @@ function vendorForm(){
    <div><div class="lbl">Namesakes cleared</div><div class="big">${r.screening.hits_cleared}</div></div><div><div class="lbl">Cost</div><div class="big">${r.cost.credits}</div><div class="mono small">credits · ₹${r.cost.inr} · ${r.elapsed_s}s</div></div></section>
    <div class="panel"><span class="lbl">Facts and sources</span><table><tr><th>Fact</th><th>Value</th><th>Source</th></tr>${r.facts.map(f=>`<tr><td>${esc(f.claim)}</td><td>${esc(f.value)}</td><td class="small">${srcLink(f.source)}</td></tr>`).join('')}</table></div>
    ${r.flags.length?`<div class="panel"><span class="lbl">Flags</span>${r.flags.map(f=>`<div class="${f.severity==='red'?'fail':'warn'}">● ${esc(f.reason)}</div>`).join('')}</div>`:''}
-   ${r.cannot_verify.length?`<div class="panel"><span class="lbl">Cannot verify</span>${r.cannot_verify.map(m=>`<div class="warn">○ ${esc(m)}</div>`).join('')}</div>`:''}`};
+   ${r.cannot_verify.length?`<div class="panel"><span class="lbl">Cannot verify</span>${r.cannot_verify.map(m=>`<div class="warn">○ ${esc(m)}</div>`).join('')}</div>`:''}
+   ${(r.decisions||[]).length?`<div class="panel"><span class="lbl">Jev decisions · about fetched text, not sources</span>${r.decisions.map(d=>d.unavailable?`<div class="ev">${esc(d.about)}: ${esc(d.unavailable)}</div>`:jevTag(d)).join('')}</div>`:''}`};
 }
 window.go=go;
 (async()=>{

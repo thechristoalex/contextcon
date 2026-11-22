@@ -145,7 +145,7 @@ def document_signals(jr, x, v):
         return []
     a, meta = jr["answers"], jr["meta"]
     q = lambda k: jev.quoted(a[k], jr["sents"], jr["text"])
-    said = lambda s: f": \u201c{s}\u201d" if s else ""
+    said = lambda s: f": \u201c{s.rstrip('.')}\u201d" if s else ""
     cite = lambda s: [{"source": "document", "field": "sentence", "value": s}] if s else []
     out = []
     if jev.yes(a["injection"]):
@@ -333,7 +333,7 @@ def check_business(job_id, x, v):
     except jev.Unavailable as e:
         return chk("business_match", "info", f"Not checked: Jev unavailable ({e}); no rule covers this, so it is not counted")
     s = jev.quoted(a["quote"], sents, text)
-    said = f": \u201c{s}\u201d" if s else ""
+    said = f": \u201c{s.rstrip('.')}\u201d" if s else ""
     ev = [bsrc | {"value": billed}] + ([{"source": url, "field": "website sentence", "value": s}] if s else []) + \
          [jev.evidence(meta, "website's business supplies what is billed?", a["match"])]
     ans = jev.yes(a["match"])
