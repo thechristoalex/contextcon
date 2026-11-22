@@ -2,329 +2,167 @@
 
 ContextCon 05, BITS Pilani · Team Humble Fumblers · Tracks **5. Trust and compliance** + **6. Buying and paying**
 
-An invoice arrives. The agent proves the vendor is real and run by its stated director, screens the director against the news and clears namesakes, matches the invoice to its PO and goods receipt, and catches duplicates, bank-detail changes and look-alike senders. It then **pays once, or holds with a cited reason**. A person approves every payment. Every step is logged and can be replayed.
+An accounts-payable agent for an Indian 3PL. For each invoice it verifies the vendor against live
+company, web and news data, runs a three-way match against the PO and goods receipt, and checks for
+duplicates, bank-detail changes, look-alike senders and prompt injection. It then **pays exactly once
+after a person approves**, or **holds the invoice with a cited reason**. It also reads paper bills
+from a photo on the local machine and reconciles bank-statement lines.
 
-## The job, and who pays for it today
-
-| | |
-|---|---|
-| **Job** | Accounts payable for an Indian 3PL: take invoices from the inbox, verify the vendor, match to PO and goods receipt, pay each invoice exactly once, stop fraud before money moves. |
-| **Who does it today** | The client's AP team plus outsourced accounting firms (paid per invoice or per month), and KYB/verification vendors (paid per business checked). |
-| **Input** | Invoice or email text (`.txt` / `.eml`) in the inbox, the client's vendor master, purchase orders and goods receipts (`data/fixtures/`). |
-| **Finished result** | Each document ends as `PAID` (simulated ledger entry with idempotency key), `HELD` (cited reason + drafted verification message), `DUPLICATE` (linked to the original) or `REJECTED` (not payable). |
-| **Pass mark** | No invoice paid twice; no payment to an unverified account or unverifiable vendor; every fact cites its source and date; "cannot verify" instead of guessing; a kill at any point resumes without repeating an action. |
-
-## Run it from a fresh clone
-
-Python 3.10+ and the standard library only. No packages to install.
-
-```bash
-cp .env.example .env            # then set CRUSTDATA_API_KEY=...
-python3 -m vendorcheck.cli inbox        # process every document in data/fixtures/inbox
-python3 -m vendorcheck.cli status       # one line per document
-python3 -m vendorcheck.cli approve "V001:2026-451" --by "AP lead"   # irreversible step: pay
-python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv            # bank-statement lines
-python3 -m vendorcheck.cli serve --port 8080                       # landing page + app at http://127.0.0.1:8080
-```
-
-A vendor check on its own (5.1 + 5.2):
-
-```bash
-python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
-```
-
-**Web app.** `serve` starts the landing page at `/` and the app at `/app`: dashboard, inbox (with bill scanning), approvals, vendors, vendor check, bank lines, ledger, activity and settings. There is no sign-in; the approver name recorded on each payment is set in Settings.
-
-HTTP API (for another system to call): procurement services under `/api/procure/*` and `/api/portal/*` (listed in `vendorcheck/procure/api.py`), plus `POST /cases`, `GET /cases/<id>`, `GET /api/invoices`, `GET /api/invoices/<key>`, `POST /api/upload`, `POST /api/approve`, `POST /api/recheck`, `GET /api/payments`.
-
-## Results on the test set (live data, 22 Nov 2026)
-
-| # | Document | Expected | Result |
-|---|---|---|---|
-| 1 | Shadowfax invoice, clean | Pay after approval | `AWAITING_APPROVAL` → approved → `PAID` once |
-| 2 | Shreeji Cargo Movers (fictitious front company) | Hold | `HELD`: no company record carries the domain; cannot verify |
-| 3 | TCI Express invoice; director "Anil Kumar" (very common name) | Namesakes cleared | Results about other people named Anil Kumar are cleared ("does not name TCI Express"). The verdict depends on live news: one run returned a report of a police raid at a TCI Express courier warehouse, where the company was the carrier. The service then **holds** the invoice with the exact passage cited and asks a person to judge the company's role, instead of guessing either way. |
-| 4 | Shadowfax invoice re-sent as `INV-2026-451` (was `INV/2026/0451`) | Duplicate | `DUPLICATE` of `V001:2026-451` |
-| 5 | "We have changed our bank" email | Hold, verify out of band | `HELD` + drafted call-back message to the contact on file (never to the sender) |
-| 6 | TCI invoice asking for payment to a new account | Hold | `HELD`: account differs from verified account; PO already invoiced |
-| 7 | Invoice from `shadowfaxx.in` (look-alike domain) | Hold | `HELD`: look-alike sender, edit distance 1 |
-| 8 | Kill after approval, before payment | Pay once | Restart → `resume` pays once; second resume and re-approve do nothing |
-
-**Bank-statement lines** (the format of the problem statement's own example), `python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv`:
-
-| Line | Result |
-|---|---|
-| 3 Oct, `RAZ*SWIGGY BLR`, ₹1,240 | Payee **Swiggy** (only one of 3 same-name Crustdata records owns swiggy.com and is an established company). Then the legal name is read from the company's own site: swiggy.com's footer states "© 2026 Swiggy Limited", so the payee becomes **Swiggy Limited**, cited to that page and passage. If the site states no legal name, or more than one, the trading name is kept and the reason says "legal name not confirmed". Account: staff meals |
-| 7 Oct, `AWS EMEA`, ₹18,500 | Payee **Amazon Web Services EMEA SARL** (vendor master alias). Account: cloud hosting |
-| 7 Oct, `AWS EMEA`, ₹18,500 | **Held**: same descriptor, amount and date as the line above; possible duplicate charge |
-| 9 Oct, `PAYTM*SHARMA TRD`, ₹4,000 | **Cannot verify**: "SHARMA" matches 4 companies equally; no source identifies the payee. Held for a person |
-| 12 Oct, `NEFT/SHADOWFAX TECHNOLOGIES`, ₹2,36,000 | Shadowfax Technologies Limited. Account: freight, last mile. A bank transfer to a vendor on file must match a payment this desk made. After invoice 1 is approved and paid, the line is **reconciled** to that payment (ref, invoice, approver). If no approved payment matches, it is **held**: money left the account with no approved invoice behind it |
-| 14 Oct, `UPI/DELHIVERY`, ₹5,600 | Delhivery (Crustdata). Account: freight, express parcel |
-
-Each bank line is posted once. A line's key is its date, description, amount and how many identical lines precede it in the statement. Re-running the file, uploading it under another name, or importing an overlapping statement therefore posts nothing new. Each payment can be claimed by only one bank line. Each line has its own cost limit, so one hard merchant cannot use up the budget for the whole statement. Hitting the limit gives `CANNOT_VERIFY`, never a crash or a guess.
-
-**Offline tests** (no API key, no credits; Crustdata is replaced by canned responses): `python3 -m unittest tests.test_bank -v`. The 9 tests cover:
-- the example statement, end to end
-- the legal-name citation, and its rules on real and tricky footers
-- re-running the file, and re-uploading it under another name
-- reconciling a transfer to exactly one payment
-- a source outage (the line becomes cannot-verify, not an answer)
-- the cost limit
-- the cost report
-
-### Scanning a paper bill
-
-In the app, **Scan a bill** (on the Dashboard and the Inbox) opens the camera: hold the bill in frame and press Capture, or use **Upload / take photo** (on a phone this opens the camera). From the command line: `python3 -m vendorcheck.cli scan path/to/bill.jpg`.
-
-- **Read on this machine, for ₹0.** Apple Vision on a Mac (compiled once from `vendorcheck/vision_ocr.swift`), Tesseract elsewhere. The photo and the bank details on it never leave the laptop. We ruled out free cloud tiers whose terms let the provider read or train on uploads.
-- **Same checks as an emailed invoice.** The rows read from the photo become an inbox document, so duplicates, three-way match, bank and GSTIN checks, the vendor check and pay-once all apply. The only change: a paper bill has no sender, so the sender-domain check reads "not applicable".
-- **Every field cites the photo.** The case view shows the photo with the line each field came from outlined, its row and its confidence.
-- **Never guessed.** A bill whose invoice number, amount, or GSTIN and vendor name cannot be read is held as "cannot read". A field read below `min_read_confidence` (Settings, default 0.5) holds the bill for a person to compare. A GSTIN that fails its check character is reported as "misread or not real", not as fake. A rupee sign misread as another currency sign is corrected only when it sits directly before a number.
-- **Read once.** Files are keyed by the photo's hash: the same photo again is answered from its stored reading, and a second photo of the same bill ends as `DUPLICATE`.
-- **Read as an Indian GST invoice** (`vendorcheck/bill.py`):
-  - **Parties:** seller, buyer (bill to) and consignee (ship to), each with its own GSTIN and state.
-  - **Invoice details:** number, invoice and due dates, place of supply, PO, IRN, Ack no and date, and e-way bill.
-  - **Items:** read column by column, including two-line rows and two-row headers.
-  - **Tax and total:** taxable value, CGST, SGST, IGST and cess with their rates, round-off, the total, and the total in words.
-  - **Bank:** account holder, account number, IFSC, bank, branch and UPI ID.
-- **Checked against the bill itself.** Printed values are tested against each other:
-  - GSTIN check character, and the IFSC format.
-  - Taxable value plus tax equals the total, and the total in words equals the total in figures.
-  - CGST equals SGST, and each tax rate matches the taxable value.
-  - Intra-state bills charge CGST and SGST; inter-state bills charge IGST.
-  - The bank account holder is the seller.
-
-  The total is chosen by this evidence, never by position, so a "Previous balance" or "Sub total" is never taken for it. An invalid GSTIN or IFSC is shown as printed, with the reason it fails.
-- **Jev as a second opinion.** Where the code finds more than one candidate (which GSTIN is the seller's, which name is the seller, which amount is the total, which number is the invoice number, which date is the invoice date), Jev picks one. It never sees GSTIN, account or phone numbers.
-  - **Agreement** marks the field confirmed.
-  - **Disagreement** holds the bill for a person, unless the words, the arithmetic or the check character already settle it.
-  - **If Jev is unavailable,** the rules stand.
-- **Benchmarked** on real photos of TallyPrime and Vyapar invoices and on public sample invoices (IndiaFilings, GSTZen), whose reader output is kept in `data/fixtures/ocr/` for `python3 -m unittest tests.test_bill -v`.
-
-Tests: `python3 -m unittest tests.test_scan -v` (15 run anywhere with a fake reader; 2 use the real reader on the test photos in `data/fixtures/bills/`, made by `tests/make_bills.swift`).
-
-## Procurement services (Zoho Procurement flow)
-
-Three services follow the workflows in [Zoho Procurement's help](https://www.zoho.com/uk/procurement/help/getting-started/welcome/): Vendors with the Vendor Portal, uploaded invoices turned into Bills, and Payments Made. Each service has its own tables. The services talk through domain events (`vendor.approved`, `invoice.uploaded`, `bill.opened`, `vendor.bank_changed`, `payment.paid`). Code is in `vendorcheck/procure/`. The org screens are **Vendors**, **Uploaded Invoices**, **Bills** and **Payments Made** in `/app`. Vendors use `/portal#t=<invite token>`.
-
-| Service | Zoho flow it follows | Design pattern | What it adds for the problem statement |
-|---|---|---|---|
-| **Vendor onboarding** (`onboarding.py`) | Invite Vendor → vendor signs up in the portal (Business, Address, Bank, Preview) → *Approval Pending* → Approve / Request More Details (*Pending Review*) / Reject; Mark Inactive | **State**: one transition table, compare-and-set moves, an audit row per move. Submission checks are small Strategy functions | GSTIN check character and PAN type, IFSC format, account holder vs legal name, email domain vs website, one GSTIN or bank account per vendor, and the Crustdata vendor check. A failed check blocks approval. An approved vendor joins the vendor master the invoice desk reads. A bank change from the portal sends the vendor back to *Approval Pending*, and payments stop |
-| **Invoice upload → Bills** (`invoices.py`) | Vendor Portal › Invoices › Uploaded Documents (*Pending* → *Accepted* / *Rejected*) → Convert to Bill → *Pending Approval* → *Open* → *Partially Paid* / *Paid* (*Overdue*, *Void*) | **Chain of Responsibility** for intake: file guard → vendor guard → exact-file dedupe → store → read (Strategy per type: text / PDF / photo) → identify → duplicate invoice → PO match → bank → GSTIN. **State** for the bill | **A UUID for every invoice.** `doc_uuid` (uuid4) names each uploaded file. `invoice_uuid` = uuid5(vendor + normalised invoice number) names the invoice, so `KF/2026/0042` and `KF-2026-42` get the same UUID. It is the bill's primary key, so the database refuses a second bill for one invoice. Uploading the same file twice returns the first document (SHA-256) |
-| **Payables** (`payables.py`) | Payments Made: + New (vendor, bills, amount per bill, mode, paid through) → *Draft* → Submit → *Pending Approval* → Approve → *Paid*; Reject, Void | **Command** (`PayCommand`) for the money movement, **Decorator** (`@idempotent`) for requests, **State** for the payment, rules as a Strategy list | **No double payment**, on three layers. (1) `Idempotency-Key` on *create* and *approve*: a retry or double-click with the same key replays the first response; the same key with a different body is refused (422); while the first call is still running, a retry gets 409. (2) The amount applied to a bill can never exceed its balance minus what other in-flight payments already promise. The balance drops by a compare-and-set update that cannot go below zero. (3) The payment's UUID is the idempotency key sent to the bank (simulated payout API, one transfer per key). The payment is marked *Processing* before the bank call, so a crash is finished by `resume()` without a second transfer. The verified account is snapshotted at approval and checked again just before the bank call; a change holds the payment |
-
-The HighRadius controls against duplicate payments are invoice matching (2-way and 3-way), vendor master hygiene, approval workflows and automatic duplicate flagging. Each appears above as a rule. None of the HighRadius pages we could read covers idempotency itself, so the request, domain and bank layers are our own design. They follow standard payout-API practice.
-
-Offline tests (no key, no credits): `python3 -m unittest tests.test_procure -v`. They cover:
-- the full onboarding flow, and front companies blocked
-- duplicate bank accounts across vendors
-- the same invoice under two number formats
-- re-uploading the same file
-- key replay and key misuse
-- a crash after the bank transfer, which resumes and pays once
-- six concurrent payments for one bill, of which exactly one is recorded
-- a bank change between approval and transfer
-
-## Diagrams (public links for the submission form)
+Design, invariants, schema and failure model: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
 | Diagram | Public link |
 |---|---|
-| System architecture (components, data stores, external calls) | https://github.com/thechristoalex/contextcon/blob/main/docs/system-context.png |
-| Agent flow (invoice and bank-line paths, checks, approval, pay once) | https://github.com/thechristoalex/contextcon/blob/main/docs/agent-flow.png |
-| Invoice state machine (exactly-once payment) | https://github.com/thechristoalex/contextcon/blob/main/docs/invoice-state-machine.png |
-| Vendor check pipeline (5.1 + 5.2) | https://github.com/thechristoalex/contextcon/blob/main/docs/vendor-check.png |
+| System architecture | https://github.com/thechristoalex/contextcon/blob/main/docs/system-context.png |
+| Agent flow (invoice and bank-line paths) | https://github.com/thechristoalex/contextcon/blob/main/docs/agent-flow.png |
+| Invoice state machine | https://github.com/thechristoalex/contextcon/blob/main/docs/invoice-state-machine.png |
+| Vendor check pipeline | https://github.com/thechristoalex/contextcon/blob/main/docs/vendor-check.png |
 | Business value chain | https://github.com/thechristoalex/contextcon/blob/main/docs/value-chain.png |
 
-![System architecture](docs/system-context.png)
+| | |
+|---|---|
+| **Job** | Take invoices from the inbox, verify the vendor, match to PO and goods receipt, pay each invoice exactly once, stop fraud before money moves |
+| **Done today by** | The client's AP team, an outsourced accounting firm (per invoice or per month) and a KYB vendor (per business checked) |
+| **Input** | `.txt`/`.eml` invoices or bill photos, vendor master, POs, goods receipts (`data/fixtures/`), bank-statement CSV |
+| **Output** | `PAID` (ledger entry + idempotency key), `HELD` (cited reason + drafted call-back), `DUPLICATE` (linked to the original), `REJECTED` (not payable) |
+| **Pass mark** | No invoice paid twice. No payment to an unverified account or vendor. Every fact cites a source and date. "Cannot verify" instead of a guess. A kill at any point resumes without repeating an action |
 
-## How it works
+## Run
 
-**Full technical and business architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). It covers the system context, modules, SQLite tables and keys, the invoice state machine, check weights, the vendor-check pipeline, external calls with costs and retries, kill and restart safety, the API, scaling, the value chain, buyer, pricing and unit economics, controls and roadmap.
+Python 3.10+, standard library only.
 
-
-The flow, as Mermaid:
-
-**Public diagram link** (opens for anyone, no sign-in; for the submission form): [architecture diagram](https://mermaid.ink/img/pako:eNptVVFv4jgQ_isjXm5XpKDd072gUysILKCyNEdYtKtcH0wyBF8dO7IdWoT6329sJ7SV9gUHe-bzzDffjC-9XBXYG0HvINRzfmTawmrzrwRYrrOl3KuXEQzsi4UhDLAStDS1UKx4hJubW4hXWSyYMfxwHgGXJ8VzJJM9k09AWLJ0_zTmyGvrvyouC9SPDj9eeYjZz2z2YjXLLRw4isKMoECLmiy5sTwnpxJfvMfsp_fYLbNlgdLSpXBCWSg9gnm6Xa4jsEeUYNDdAYWqGJftnmQVeozd0mNMfySXKWXCc2bx7u-9Ht5KpSsmuMHimolUg8ifKQ2GENrr-qxSjbT9gnz7ycOrwyVAAoYzmoCf0cZqGY-3s8d3x1IF2haz-D51-6bZl5rVx3YLiPICa5eAtMQg5k8mAmT5kWiwjZYGmAQ8cTrPKdAT6oLn1l8BkGbp-9ThZNqA243WbJ55tgK8K5OOIBmvwZ5rjGBPFeKyBKs654oZ29YM4Hv2580zO9OmzY8jSB4iKJUqTFdlgnqgNC0woZEVZ8ITAovWe5JNnDSowIwLEwLUnOpeAMtzRyrlV8BRCZfGtWgA22wXgrG6MRb-GnyBPv1-9cd04pZt4HaafYqdEVWHkSg7pezPV0Wg1Dw_RvCMezig7T4NMp0fPwdxhnI4wPF8no3LkmRI5R6RJS-PlqqiuXkCkytNpFGqRgV-ydxVmskzHCjJYSPZiVa2Fzh8Zlp6zEW2mK2mlEKh2cFS9hUaw0r8gCAE1NRbIYjksmgqqj2ra61OTHjRjb2owhZ6u2T8K0uoPIrkMaIWTmebLTzhma7YX7vlnbz9heTknVfZp5RXjWAuopqdKydCKl6JumVlCjcDkh_qM-QuvoHzmjnGlelMKSuNplbSIBmRyD4y2vmTpmrvn27p2n9W3JH7n9oTs-6IljZM-qLhwAkvcq7Sms9v8wMa6WTm2KX5Qu0VWjOQ7KwmaZCcsZSVTyhOd2F4Te6zFZfo6KGZQ8cUuUUadf0OpQ8qzxutXbP5OdCJuqZ0sbgD88RrH8zkPkBOL6mbEw4tchQiLQEs-If-ZVpwIkrQ7Xe-kJPp--GxeNtqB8YkcVVFYuhDTxIhgli-yv2qdn9ZnwpSMuHbCA5aVW4UQq6qmsT5hwH1TLOSaA8JJL8vbXfmQzGq0aQbg9YKipUHnuNdFo_X64ct7Gab5bdfERxpjsOBwmRQo-46w8Pcwia-rGfftsPNdp4Ol9-T1AdL44Z1ySlJT4FoqdnE7nI_btCz18r9TaFeum-mTgS_M1m8meRMFySXH0l4DOYk_MRX1E29VsXtPHJa60XQq-hFYrygh_LSIxor_2QWeGCNsL3X1_8BbgldtA)
-
-```mermaid
-flowchart LR
-  IN[Inbox: .txt / .eml / upload] --> CL[Classify: invoice / bank change / receipt / reminder]
-  CL --> EX[Extract fields: deterministic regex]
-  EX --> VI[Identify vendor: GSTIN, then sender domain, then name]
-  VI --> DUP{Duplicate?<br/>normalised invoice no.,<br/>or same vendor+amount+date+PO}
-  DUP -- yes --> D[DUPLICATE]
-  DUP -- no --> CHECKS
-  subgraph CHECKS [Independent checks, each returns an evidenced verdict]
-    S[Sender domain vs vendor domain]
-    G[GSTIN check char, PAN type, binding to vendor master]
-    M[3-way match: PO, goods receipt, PO not already billed]
-    B[Bank details vs verified account and holder name]
-    T[Vendor trust 5.1 + 5.2]
-  end
-  T --> CD[(Crustdata: identify by domain, enrich, web fetch, web search)]
-  CHECKS --> AGG[Aggregate: weights, risk score, reason]
-  AGG -- any fail/unavailable/warn --> H[HELD + drafted message]
-  AGG -- all pass --> AP{Human approval}
-  AP -- approve --> PAY[Pay once: INSERT keyed by vendor:invoice no.]
-  PAY --> L[(Simulated payment ledger)]
-  CD -. every call .-> LED[(Cost ledger + response cache)]
-  CHECKS -. every step .-> ST[(SQLite: jobs, steps, invoices, actions, events)]
-  CL -- unreadable / no amount --> H
-  BS[Bank statement CSV] --> BK[Line key: date + text + amount + occurrence<br/>already posted? skip]
-  BK --> BD{Same date, payee, amount<br/>as an earlier line?}
-  BD -- yes --> H
-  BD -- no --> BP[Payee: vendor master, else Crustdata identify<br/>+ legal name from the company's own site]
-  BP -. every call .-> LED
-  BP -- no source settles it --> CV[CANNOT VERIFY, held for a person]
-  BP --> RC{NEFT/RTGS/IMPS<br/>to a vendor on file?}
-  RC -- matches an approved payment --> L
-  RC -- no approved payment --> H
-  RC -- card / UPI --> GL[(Posted to ledger account)]
+```bash
+cp .env.example .env                       # CRUSTDATA_API_KEY=..., optional TYPESAFE_API_KEY=...
+python3 -m vendorcheck.cli inbox           # process data/fixtures/inbox
+python3 -m vendorcheck.cli status
+python3 -m vendorcheck.cli approve "V001:2026-451" --by "AP lead"
+python3 -m vendorcheck.cli scan path/to/bill.jpg
+python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv
+python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
+python3 -m vendorcheck.cli serve --port 8080   # landing at /, app at /app
+python3 -m unittest discover tests         # 108 tests, offline, no keys, no credits
 ```
 
-**Vendor trust (5.1 + 5.2)**, `vendorcheck/pipeline.py`:
+Crash test: `CRASH_AFTER_APPROVE=1 python3 -m vendorcheck.cli approve <key> --by X`, then `… resume`.
+The invoice is paid once. A second `resume` or `approve` changes nothing.
 
-1. **Resolve the entity by domain, never by name alone.** By name, Crustdata returned a French "SAFEXPRESS" at confidence 1.0 above the Indian Safexpress, and three different "Shadowfax" companies at 1.0. If a name maps to more than one company, the result is `CANNOT_VERIFY` with the candidates listed.
-2. **Company profile** (`/company/enrich`): name, type, year founded, headcount, HQ, founders/CXOs, news. Crustdata's `status` is cited as the dataset's status, not as registry status.
-3. **Website** (`/web/enrich/live`): live, names the company, not parked.
-4. **Registry IDs.** A CIN or GSTIN is accepted only if the **fetched page itself** (`/web/enrich/live`) states it next to the company's name. A search snippet is never a source, and search redirect links (`google.com/goto`) cannot be fetched, so they are never cited. If no fetchable page settles it, the output says "registry not confirmed" and why. MCA has no public API, and we do not bypass the portals' CAPTCHAs.
-5. **Adverse media.** The company and the director named on the request are screened first, then the leaders on record. Only legal and regulatory terms count (raid, FIR, ED/CBI, NCLT, GST evasion, money laundering); consumer complaints do not. A hit is escalated only when the **fetched article** names the person **and** the company. If the article cannot be retrieved, it is a "possible match" and is held for a person, never treated as a finding. Results about other people with the same name are cleared as namesakes. **Data minimisation:** for namesakes we keep only the count and the reason, never their names, links or passages. The report shows `hits_found / hits_cleared / hits_escalated`.
-6. **Verdict:** `CLEAR`, `HOLD` (with flags) or `CANNOT_VERIFY` (naming what is missing). The verdict is cached per vendor, so later invoices from the same vendor cost 0 credits.
+## How it decides
 
-**Jev, the decision model** (`vendorcheck/jev.py`, TypeSafe AI). Jev returns a typed yes/no, choice or score with probabilities in about 100 ms. Here it **reads text we already hold**. It is never a source, and it can add a hold or flag but never clear one. Thresholds are in `vendorcheck/config.py` (adjustable at runtime through `POST /api/settings`): yes at 0.80 or above, no at 0.20 or below, and anything in between means "cannot tell".
+- **Entity by domain, not name.** Searched by name, Crustdata returned a French "SAFEXPRESS" at
+  confidence 1.0 above the Indian one, and three "Shadowfax" records at 1.0. A name maps to a company
+  only if exactly one match has confidence ≥ 0.95 and an exact name. Otherwise the result is `CANNOT_VERIFY`
+  with the candidates listed.
+- **Only fetched pages are sources.** A CIN, GSTIN or adverse-media hit counts only when the page,
+  fetched live, states it next to the company's name. Search snippets and redirect links are never cited.
+- **Adverse media needs the person and the company in the same article.** Only legal and regulatory
+  terms count. Namesakes are counted and cleared, and nothing else about them is stored.
+- **Rules decide, Jev restricts.** Jev (TypeSafe, `jev-1.14.0`) answers typed questions about text
+  already held: document type, changed account, pressure level, text aimed at an automated reviewer,
+  parked site, whether the site's business matches what is billed. It can add a hold, never clear one.
+  It quotes by choosing a sentence id. Code splits the sentences and prints the one chosen verbatim.
+  Tax IDs, bank numbers, phones and emails are redacted before sending. If Jev is down, the rule stands.
+- **Exactly once.** Payment key = `vendor_id:normalised_invoice_no`, the primary key of `payments`. The
+  insert and the state change share one transaction. The vendor record is hashed at approval and
+  re-checked at payment.
+- **Never billed twice.** Every API response is cached by request hash before its step is checkpointed.
+  Limits per job: 12 credits, 180 s. Reaching either gives `CANNOT_VERIFY`.
 
-| Where | Question to Jev | What the rule does with the answer |
+A person approves every payment, judges every `HELD` item, and sends any drafted message. The system
+never sends email.
+
+## Procurement services
+
+`vendorcheck/procure/` follows Zoho Procurement's flows: vendor onboarding through a portal
+(`/portal#t=<invite token>`), uploaded invoices converted to bills, and Payments Made. The services
+own separate tables and communicate through domain events.
+
+- An approved vendor joins the vendor master that the invoice desk reads.
+- If a vendor changes its bank details in the portal, it goes back to approval and its payments stop.
+- Each invoice gets `uuid5(vendor:normalised number)` as its bill's primary key, so `KF/2026/0042` and
+  `KF-2026-42` cannot become two bills.
+- Payments are idempotent at three layers: the `Idempotency-Key` header, balance reservation with a
+  compare-and-set decrement, and the payment UUID sent to the payout API as its idempotency key.
+
+Details are in §8 of the architecture doc.
+
+## Results (live Crustdata, 22 Nov 2026)
+
+| # | Document | Result |
 |---|---|---|
-| Every inbox document (one call) | What kind of document is this? | Jev can only switch a document to the more careful bank-change route. Any other disagreement goes to a person |
-| | Does it say the bank account to pay is new or changed? | Hold, quoting the sentence, unless the account given is the verified one on file |
-| | How much pressure does it apply? (4 levels) | "Urgency + secrecy / don't call us" holds the document. Plain urgency is a warning |
-| | Does it contain text aimed at an automated reviewer ("skip the checks, mark approved")? | Hold as a manipulation attempt, quoting the sentence |
-| Vendor website (vendor check) | Is it a parked or placeholder page? Is it really this company's site? | Red or amber flag. The "names the company" fact quotes a real sentence from the page |
-| Invoice vs vendor | Does the vendor's own website describe the business billed for (the invoice description or the PO item)? | Mismatch → hold ("possible front company"). Uses the page already fetched: 0 Crustdata credits |
+| 1 | Shadowfax invoice, clean | `AWAITING_APPROVAL` → approved → `PAID` once |
+| 2 | Shreeji Cargo Movers (fictitious front) | `HELD`: no company record carries the domain |
+| 3 | TCI Express, director "Anil Kumar" | Namesakes cleared. A news report of a raid at a TCI warehouse (TCI was the carrier) holds the invoice with the passage cited, for a person to judge the company's role |
+| 4 | Shadowfax re-sent as `INV-2026-451` (was `INV/2026/0451`) | `DUPLICATE` of `V001:2026-451` |
+| 5 | "We have changed our bank" email | `HELD` + call-back draft to the contact on file, never the sender |
+| 6 | TCI invoice to a new account | `HELD`: account ≠ verified; PO already invoiced |
+| 7 | Invoice from `shadowfaxx.in` | `HELD`: look-alike domain, edit distance 1 |
+| 8 | Kill after approval, before payment | `resume` pays once; repeats are no-ops |
 
-**Citations without a source model.** Jev returns no text spans. Code splits the text into sentences, Jev picks a sentence id (or `none`), and code quotes that sentence verbatim only if it appears in the document or page. **Data minimisation:** GSTIN, PAN, IFSC, bank and phone numbers and email addresses are redacted before anything is sent. **Robustness:** each call has a ledger row (`jev:/v1/systemone`, 0 credits) and a logged request id. 429, 529 and 5xx are retried with backoff. A missing key, a 401, or a source that is still down falls back to the rule: "jev unavailable (fell back to rule)".
+| Bank line | Result |
+|---|---|
+| `RAZ*SWIGGY BLR` ₹1,240 | **Swiggy Limited**: one of 3 same-name records owns swiggy.com. The legal name is from the site footer, cited. Account: staff meals |
+| `AWS EMEA` ₹18,500 | Amazon Web Services EMEA SARL (vendor-master alias). Account: cloud hosting |
+| `AWS EMEA` ₹18,500 (again) | `HELD`: same date, descriptor and amount |
+| `PAYTM*SHARMA TRD` ₹4,000 | `CANNOT_VERIFY`: 4 companies match equally |
+| `NEFT/SHADOWFAX TECHNOLOGIES` ₹2,36,000 | Reconciled to the payment for invoice 1. With no approved payment it would be `HELD` |
+| `UPI/DELHIVERY` ₹5,600 | Delhivery. Account: freight, express parcel |
 
-**Where a person is needed:** every payment, since it cannot be undone (the approver's name is recorded). Every `HELD` item. Sending any drafted message: the system never sends email or contacts anyone.
+**Bill photos** are read locally (Apple Vision on macOS, Tesseract elsewhere) at no cost. The image and
+the bank details on it never leave the machine. Parties, items, CGST/SGST/IGST, IRN, e-way bill and bank
+fields are extracted, then tested against each other: GSTIN check character, taxable + tax = total, total
+in words = total in figures, CGST = SGST, intra- vs inter-state tax. A field that cannot be read is held,
+never guessed. The bill then goes through the same checks as an emailed invoice.
 
-## Robustness
+## Cost and price
 
-- **Exactly once.** The payment row's primary key is `vendor_id:normalised_invoice_no`. Approval and payment are separate states. `resume` (run on every start) pays approved-but-unpaid invoices. Re-running, re-approving or re-resuming changes nothing. Test it with `CRASH_AFTER_APPROVE=1 python3 -m vendorcheck.cli approve ...`, then `python3 -m vendorcheck.cli resume`.
-- **Master-data manipulation.** A hash of the vendor record (bank, GSTIN, domain) is stored at approval. If it differs at payment time, the payment is held for re-approval.
-- **Restart mid-check.** Each pipeline step is checkpointed. Each API response is cached by request hash before the step is marked done, so a restart replays from cache and is not billed twice.
-- **Source failures.** Up to 3 retries with backoff, honouring `x-ratelimit-reset` on 429. If a source is still down, the check is marked `unavailable` ("source unavailable, not the same as no record") and the invoice is held. `Replay checks` (UI) or `POST /api/recheck` re-runs it later.
-- **Limits.** Cost limit per job (`MAX_CREDITS_PER_JOB`, default 12 credits) and time limit (`MAX_SECONDS_PER_JOB`, default 180 s). Hitting either gives `CANNOT_VERIFY`, never a guess.
-- **Deterministic.** Extraction and verdicts are rules. Jev (below) answers typed questions inside those rules, pinned to `jev-1.14.0` and cached by request hash, so a re-run gives the same answers and the same verdict. If Jev is off or down, each check falls back to its rule and says so.
-- **Vendor verdicts follow the vendor record.** A vendor's check result is reused across its invoices, but it is keyed by the facts it checked: legal name, domain, director and GSTIN. If any of them changes on the vendor master, the vendor is checked again instead of reusing an old `CLEAR`. The vendor master's GSTIN is also looked up on public pages.
-- **Bills from senders not on file get a background check.** A bill whose vendor is not on file runs the same vendor check on what the bill says about itself:
-  - the business name, or else the bank account name;
-  - the company email domain (never gmail, yahoo, outlook or another free-mail domain);
-  - the GSTIN.
+Every call's `X-Credits-Used` is recorded in the cost ledger. ₹25 per credit ($4,500 promo / 15,000 credits).
 
-  The bill stays held, because an unknown vendor is never paid. A clear result reads "real company, but not a vendor on file: add it to the vendor master before paying"; any other result counts against the bill. The bank account name is compared with the legal name found. A bill with only a GSTIN gets what the number proves (state, PAN, PAN holder type) with no API call. The lookup is keyed by the business, not the invoice, so a second bill from the same business reuses it. Live, a Delhivery bill cost 8.2 credits (₹205): public company, founded 2011, about 35,300 employees, site live and naming the company, and 7 namesake adverse results correctly cleared.
-- **GSTIN facts at no cost.** The PAN inside a GSTIN says what kind of holder it is: C company, F firm or LLP, P individual, and so on. A name that says Limited or LLP on a PAN of another kind is flagged ("a company bills under its own PAN"). The GST state is reported as a fact but never compared with an address, because head offices often sit in another state.
-- **A site that only answers on www is not "down".** If a website fails to load, the same host is tried once with or without `www.` (delhivery.com only has a certificate for www.delhivery.com). If both fail, the flag states the error.
+| Job | Calls | Measured | Proposed price |
+|---|---|---|---|
+| New vendor verified | 7–9 | 7.2–9.2 cr = ₹180–230 | ₹1,500 |
+| Invoice, vendor already verified | 0 | ₹0 (verdict cached) | ₹60 |
+| Bank line, known payee | 0 | ₹0 | ₹20 |
+| Bank line, new merchant | 2 | 1.2 cr = ₹30 | ₹20 |
+| Statement of 6 lines, 3 new merchants (live) | 5 | 2.6 cr = ₹65 | ₹120 |
 
-## How we tested it
+Example month for a mid-size 3PL: 40 new vendors, 2,000 invoices and 1,000 bank lines come to ₹2,00,000
+billed against about ₹12,200 of data cost. The prices are our proposal, not a market quote. Jev adds about
+1,500–2,000 input tokens per document, roughly ₹0.007.
 
-- **Live runs** with Crustdata on 22 Nov 2026 produced the results tables above.
-- **Offline tests:** 55 tests that need no API key or credits, because the live vendor check and Crustdata are replaced by fixed responses. Run them with `python3 -m unittest discover tests -v`.
-  - `tests/test_payables.py` (9 tests):
-    - every inbox outcome
-    - re-running the inbox changes nothing
-    - a bank-change email is held with a drafted call-back
-    - pay exactly once (second approval refused, second pay a no-op)
-    - a crash between approval and payment, then restart, pays once
-    - a vendor record changed after approval holds the payment
-    - a changed vendor record is checked again
-    - a source outage holds the invoice instead of passing it
-    - unusual layouts ("Bill No", no amount, an unreadable memo) are held, never filed or guessed
-  - `tests/test_bank.py` (9 tests):
-    - the example statement, end to end
-    - the legal-name citation and its rules
-    - re-running the file, and re-uploading it under another name
-    - reconciling a transfer to exactly one payment
-    - a source outage, the cost limit and the cost report
-  - `tests/test_scan.py` (17 tests): reading bill photos, rows and the rupee-sign fixes; 2 use the real reader
-  - `tests/test_background.py` (20 tests):
-    - PAN holder type and the company-name rule
-    - every background-check outcome for an unknown sender
-    - free mail, nothing to look up, GSTIN only
-    - lookup errors held, and Replay after an outage
-    - one lookup per business
-    - account name vs legal name
-    - the www fallback for websites
-
-## Cost per job and price
-
-Measured from the cost ledger (every Crustdata call records its `X-Credits-Used`). ₹25 per credit: the event promo gave $4,500 of usage for 15,000 credits, which is $0.30 per credit.
-
-| Job | Crustdata calls | Measured cost | **Our proposed price** | Gross margin |
-|---|---|---|---|---|
-| New vendor verified (identify, enrich, website, registry, 3 adverse searches, page fetches) | 7–9 | 7.2–9.2 credits = **₹180–230** | **₹1,500** | ~85% |
-| Invoice processed from an already-verified vendor | 0 | **₹0** (local checks; vendor verdict cached) | **₹60** | ~100% before hosting |
-| Bank-statement line, payee on the vendor master or a merchant seen before | 0 | **₹0** (vendor master, or Crustdata answer from cache) | **₹20** | ~100% before hosting |
-| Bank-statement line, merchant never seen before | 2 (identify 0.2 + site fetch 1.0) | 1.2 credits = **₹30** | **₹20** | −50% on that line |
-| Bank statement, measured live (6 lines, 3 merchants never seen before) | 5 | 2.6 credits = **₹65**, about ₹11 a line | **₹120** (6 × ₹20) | ~45% on a first statement, rising as merchants repeat |
-| Duplicate or bank-change email | 0 | ₹0 | included | — |
-
-Bank lines are priced per line, not per new merchant. A client's first statement runs at a thin margin because most merchants are new. Later statements are mostly repeat merchants, which cost nothing.
-
-The **buyer** is the AP or finance head of a mid-size Indian 3PL. Today they pay an outsourced accounting firm per invoice or per month, and a KYB vendor per business checked. A typical month of 40 new vendors, 2,000 invoices and 1,000 bank lines would cost them **₹2,00,000** with us (40 × ₹1,500 + 2,000 × ₹60 + 1,000 × ₹20). Our measured data cost for that month is about **₹12,200** (40 × ₹230 for vendors, plus about 100 new merchants × ₹30). The prices are our proposal, not a market quote. Jev adds about 1,500–2,000 input tokens per document, roughly $0.00008 (₹0.007) at $0.042 per million input tokens (third-party price; confirm in the TypeSafe console). Output tokens are free, and cached re-runs cost nothing.
-
-## Data sources the service calls
+## Data sources
 
 | Source | Endpoint | Used for |
 |---|---|---|
-| Crustdata Company Identify | `POST /company/identify` | Domain → company record, duplicates and look-alikes |
-| Crustdata Company Enrich | `POST /company/enrich` | Name, type, year founded, headcount, HQ, founders/CXOs, news |
-| Crustdata Web Fetch | `POST /web/enrich/live` | Website liveness and content |
-| Crustdata Web Search | `POST /web/search/live` | CIN listings, adverse media for the company and directors |
-| Client records | `data/fixtures/*.json` | Vendor master (verified bank, GSTIN, contact), POs, goods receipts |
-| Local computation | none | GSTIN check character, PAN entity type, state code |
-| Jev (TypeSafe AI), `jev-1.14.0` | `POST api.typesafe.ai/v1/systemone` | Typed decisions about text we already fetched (document type, account change, pressure, text aimed at the AI, parked site, business match). Not a source |
+| Crustdata | `POST /company/identify` | Domain or name → company record |
+| Crustdata | `POST /company/enrich` | Type, founded, headcount, HQ, founders/CXOs, news |
+| Crustdata | `POST /web/enrich/live` | Website liveness/content; verifying cited pages |
+| Crustdata | `POST /web/search/live` | CIN, GSTIN, adverse media |
+| TypeSafe Jev | `POST /v1/systemone` | Typed decisions about text already held. Not a source |
+| Local | — | GSTIN check character, PAN holder type, state code, OCR |
+| Client | `data/fixtures/*.json` | Vendor master, POs, goods receipts, chart of accounts |
 
-## Approaches tried
+## Approaches dropped
 
-- **Name-first entity resolution failed** on look-alikes (see above), so we resolve by domain and treat a name-only match as ambiguous.
-- **Taking CINs from search snippets** gave four CINs for "TCI Express" (group companies). We now accept only a CIN from a result that names the company, and only if it is unique.
-- **A broad adverse-media word list** flagged Shadowfax on consumer complaints ("fake delivery"). We switched to legal and regulatory terms only and require person and company in the same article.
-- The research behind the design is in `context/research/` on the `0x1622` branch: a track deep-dive and a vendor-fraud landscape covering HighRadius, Trustpair, Eftsure and the Indian KYB stack. The binding checks (GSTIN ↔ vendor master, bank holder ↔ legal name, sender domain ↔ vendor domain) and re-verification on bank change come from there.
+- **Name-first entity resolution.** It failed on look-alikes, so resolution is by domain first.
+- **CINs taken from search snippets.** "TCI Express" gave four group-company CINs. Now the fetched page
+  must state the CIN, and there must be exactly one.
+- **A broad adverse-media word list.** It flagged Shadowfax for consumer complaints. Now only legal and
+  regulatory terms count, and the person and the company must appear together.
 
-## What is left out
+## Not built
 
-- No MCA/GST registry API: MCA has no public API, and the portals use CAPTCHAs, which we do not bypass. Registry status is reported as "not confirmed" with the reason.
-- No real bank rails or penny drop. Payments go to a simulated ledger with an idempotency key, not to a payment provider's test mode.
-- No PEP/sanctions lists yet.
-- Invoice fields are read with deterministic rules tuned to common Indian invoice layouts. An unusual layout leads to a hold, not a guess, but it does need a person.
-
-## What it could do in the future
-
-| Next | Why not today |
-|---|---|
-| Pay through Razorpay or Stripe test mode, passing our invoice key as the provider's idempotency key | Seven hours. The simulated ledger already proves the exactly-once logic; a provider adds a second guard but no new decision |
-| OpenSanctions screening for directors | A new source needs its own namesake rules, or it trades false negatives for false positives |
-| Domain age via RDAP; Person Enrich to test "the director works somewhere else" | Each is a new signal that needs tuning on real fronts before it can change a verdict |
-| A model step to read unusual invoice layouts, with its cost in the ledger | It would bring a model into the decision path. We kept decisions deterministic so that every verdict can be replayed |
-| A Tally or Zoho Books connector in place of the local ledger | Needs a client's sandbox |
-
-## The future of this service
-
-Today an Indian mid-size company pays three parties to move one rupee safely: an AP team or outsourced accounting firm to process invoices, a KYB vendor to check new suppliers, and an auditor to replay the books. Once agents can do the whole job, these merge into one service:
-- every vendor is checked against live records before its first invoice and re-checked whenever its record changes
-- every rupee leaves exactly once, with a cited reason
-- every bank line is tied back to an approved invoice
-
-The person in the loop stops doing the routine work. They only approve what cannot be undone and judge the cases no source can settle. The firm is paid per job done rather than per hour. The audit trail is a by-product, not a separate engagement.
+- MCA/GST registry lookups: MCA has no public API and the portals use CAPTCHAs, which we do not
+  bypass. These are reported as "registry not confirmed".
+- Real bank rails or penny drop. Payments go to a simulated ledger with an idempotency key.
+- PEP/sanctions screening (OpenSanctions), domain age (RDAP), a Tally/Zoho connector, a provider-side
+  idempotency key (Razorpay/Stripe test mode).
 
 ## Credits
 
 No third-party code. Python standard library only. Data from the Crustdata API.
 
-### Font licence: PP Mondwest
-
-`vendorcheck/static/PPMondwest-Regular.otf` is **PP Mondwest by Pangram Pangram Foundry** (https://pangrampangram.com). It is **not covered by this repository's licence**. It is used here under Pangram Pangram's **free trial licence for personal use**, downloaded from the foundry's site on 22 November 2026, for this non-commercial hackathon project only.
-
-- Copyright © Pangram Pangram Foundry. All rights reserved by the foundry.
-- Do not reuse, redistribute or use this font file commercially. To use PP Mondwest in your own work, get it, and a licence that fits your use, from https://pangrampangram.com.
-- The full terms are in the licence file that ships with the font download and on the foundry's website. Those terms take precedence over this summary.
-- Without the file, the app falls back to Cormorant Garamond / Georgia and works the same.
+**PP Mondwest font.** `vendorcheck/static/PPMondwest-Regular.otf` is by Pangram Pangram Foundry
+(https://pangrampangram.com) and is **not covered by this repository's licence**. It is used under the
+foundry's free personal-use trial licence, downloaded 22 Nov 2026, for this non-commercial hackathon
+project only. Copyright © Pangram Pangram Foundry. Do not reuse, redistribute or use it commercially.
+For your own use, get the font and a fitting licence from the foundry. The foundry's terms take
+precedence over this summary. Without the file, the app falls back to Cormorant Garamond / Georgia.
