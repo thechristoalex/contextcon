@@ -7,6 +7,7 @@ Each step is checkpointed; a restarted job skips finished steps and re-uses cach
 API responses, so nothing is paid for or done twice.
 """
 import hashlib
+import html as html_lib
 import json
 import re
 import time
@@ -85,7 +86,7 @@ def first_list(x):
 def visible_text(html):
     """Page HTML -> the text a visitor sees: no scripts, styles or tags."""
     html = re.sub(r"(?is)<(script|style|noscript|template)[^>]*>.*?</\1>", " ", html or "")
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html)).strip()
+    return re.sub(r"\s+", " ", html_lib.unescape(re.sub(r"<[^>]+>", " ", html))).strip()
 
 
 def website_text(job_id):

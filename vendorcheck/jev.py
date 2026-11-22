@@ -169,7 +169,7 @@ def quote_question(instructions, sents):
 
 def quoted(a, sents, text):
     """The sentence Jev picked, verbatim, if it really appears in `text`; else None."""
-    k = pick(a)
+    k = a.get("choice") if a.get("confidence", 0) >= CONFIG["jev_quote_min"] else None
     if not k or not k.startswith("s") or not k[1:].isdigit():
         return None
     i = int(k[1:])

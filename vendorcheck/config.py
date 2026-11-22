@@ -39,6 +39,7 @@ CONFIG = {
     "jev_no": 0.20,           # at or below this reads as no; in between is "cannot tell", never "medium"
     "jev_choice_min": 0.80,   # a choice counts only at this confidence
     "jev_score_min": 0.70,    # a score level counts only if its own probability clears this
+    "jev_quote_min": 0.50,    # pointing at a sentence to quote (code checks the quote is really in the text)
     "jev_timeout_s": 20,
     "jev_retries": 2,
 }
