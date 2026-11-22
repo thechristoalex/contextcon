@@ -263,3 +263,12 @@ The person in the loop stops doing the routine work. They only approve what cann
 ## Credits
 
 No third-party code. Python standard library only. Data from the Crustdata API.
+
+### Font licence: PP Mondwest
+
+`vendorcheck/static/PPMondwest-Regular.otf` is **PP Mondwest by Pangram Pangram Foundry** (https://pangrampangram.com). It is **not covered by this repository's licence**. It is used here under Pangram Pangram's **free trial licence for personal use**, downloaded from the foundry's site on 22 November 2026, for this non-commercial hackathon project only.
+
+- Copyright © Pangram Pangram Foundry. All rights reserved by the foundry.
+- Do not reuse, redistribute or use this font file commercially. To use PP Mondwest in your own work, get it, and a licence that fits your use, from https://pangrampangram.com.
+- The full terms are in the licence file that ships with the font download and on the foundry's website. Those terms take precedence over this summary.
+- Without the file, the app falls back to Cormorant Garamond / Georgia and works the same.
