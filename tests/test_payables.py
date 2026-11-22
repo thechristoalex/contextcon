@@ -134,6 +134,18 @@ class PayablesTest(unittest.TestCase):
         self.assertEqual(ap.process_file("/t/receipt.txt", text=receipt)["state"], "rejected")  # filed: nothing to pay
         self.assertEqual(ap.payments(), [])
 
+    def test_gst_bill_header_name_total_and_date(self):
+        # a real DTDC tax invoice layout: issuer name as a heading, pre-tax "Invoice Amount", total after GST further down
+        bill = ("TAX INVOICE\nDTDC Express Limited\nShop No.51 52 53 Opp. Maruthi Gate No.2 Old\nGSTIN: 06AAACD8017H1ZW\n"
+                "CIN: U85110KA1990PLC011089  www.dtdc.com\nTO:  Invoice No.  HR0627WI012747\nSAHU  Invoice Date  25.07.2026\n"
+                "Acme Freight Private Limited\n1745  Sector 4  Invoice Amount  767.38\nTaxable Value  792.38\nTotal invoice Value  935.00\n")
+        x = ap.extract(bill)
+        self.assertEqual(x["vendor_name_text"], "DTDC Express Limited")   # the issuer, not the buyer after "TO:"
+        self.assertEqual(x["website_text"], "dtdc.com")
+        self.assertEqual(x["amount_inr"], 935.0)                          # what is owed, not the pre-tax subtotal
+        self.assertEqual(x["invoice_date"], "25.07.2026")
+        self.assertEqual(ap.bill_request(x)["website"], "dtdc.com")
+
     def test_source_down_holds_instead_of_passing(self):
         fake_run_request.down = True
         s = self.states()

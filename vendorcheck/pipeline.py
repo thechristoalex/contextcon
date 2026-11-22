@@ -207,7 +207,14 @@ class Job:
                 out["chosen"] = ranked[0]
                 out["duplicates"] = [c for c in ranked[1:]]
             else:
-                out["reason"] = f"no company record carries the domain {domain}"
+                # records found for the domain but none lists it as its own (e.g. dtdc.com -> DTDC Express Limited, DTDC 3PL,
+                # DTDC UK, all without a primary domain). Domain AND exact legal name must agree on exactly one: never name alone.
+                both = [c for c in cands if name and c["confidence"] >= CONFIG["strong_match"] and name_similarity(name, c["name"]) >= 0.99]
+                if len(both) == 1:
+                    out["chosen"], out["via"] = both[0], "domain + exact name"
+                else:
+                    out["reason"] = f"no company record carries the domain {domain}" + (
+                        f" ({len(cands)} records answer to it, none with exactly the name '{name}')" if cands and name else "")
             return out
         # name only
         resp, meta = crust.call(self.id, "/company/identify", {"names": [name]})
