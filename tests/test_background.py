@@ -228,6 +228,15 @@ class UnknownVendorTest(PatchedCheck):
         self.assertEqual(out["invoice_key"], next(i["invoice_key"] for i in ap.invoices()))
         self.assertTrue(out["invoice_key"].startswith("unknown:"))
 
+    def test_printed_website_is_not_proof_the_bill_came_from_that_company(self):
+        fake = self.use(FakeVendorCheck("CLEAR", "DTDC Express Limited"))
+        text = "TAX INVOICE\nDTDC Express Limited\nwww.dtdc.com\nInvoice No: DT-77\nGrand Total: ₹935.00\n"
+        _, _, checks = self.process(text, "printed.txt")
+        self.assertEqual(fake.calls[0]["website"], "dtdc.com")
+        self.assertIn("printed on the bill", checks["background_check"]["reasoning"])
+        # a sender's company email is not described that way
+        _, _, checks = self.process(bill(sender="billing@delhivery.com", vendor="Delhivery Limited", invoice_no="E-9"), "email.txt")
+        self.assertNotIn("printed on the bill", checks["background_check"]["reasoning"])
 
 class WebsiteFetchTest(TempStore):
     """delhivery.com only has a certificate for www.delhivery.com: a live site must not be flagged as dead."""

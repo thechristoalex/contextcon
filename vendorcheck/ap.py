@@ -412,9 +412,14 @@ def check_unknown_vendor(x):
                     "Not the same as 'no record'; held until it can be checked", weight=50)], None
     ev = [{"claim": f["claim"], "value": f["value"], "source": f["source"]} for f in rep["facts"]]
     who = (rep.get("entity") or {}).get("name") or req["vendor_name"] or req["website"]
+    sender = x.get("sender_domain")
+    printed = req["website"] and req["website"] == x.get("website_text") and (not sender or sender in FREE_MAIL)
+    # a website printed on a bill is the bill's own claim: anyone can print www.bigcompany.com on a fake invoice
+    caveat = (f" The website {req['website']} was printed on the bill, so this shows the company exists, not that the bill came from it: "
+              "confirm on a number from the company's own website before adding it.") if printed else ""
     if rep["verdict"] == "CLEAR":
         out = [chk("background_check", "warn", f"{who} appears to be a real, active company ({rep['summary']}), but it is not a vendor on file. "
-                   "Add it to the vendor master before paying", ev)]
+                   "Add it to the vendor master before paying." + caveat, ev)]
     else:
         why = "; ".join([f["reason"] for f in rep["flags"]] + rep["cannot_verify"]) or rep["summary"]
         out = [chk("background_check", "fail", f"Background check on {who}: {rep['verdict'].replace('_', ' ').lower()}. {why}", ev, weight=20)]
