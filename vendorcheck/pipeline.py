@@ -205,10 +205,27 @@ class Job:
 
     # ---------- step 3: website ----------
     def s_website(self, url):
-        resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": [url]})
-        page = first_list(resp)[0] if first_list(resp) else {}
-        text = visible_text(page.get("content"))
-        return {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or url, "meta": meta}
+        """Fetch the vendor's site. Large sites often block automated fetches and return an empty shell, which would
+        hold an honest vendor for 'website did not load'. So a failed or near-empty fetch is retried with Crustdata's
+        human_mode (a browser-like fetch), then on the www. host. Each retry costs 1 credit and only runs on failure."""
+        host = urllib.parse.urlparse(url).hostname or ""
+        tries = [(url, False), (url, True)]
+        if host and not host.startswith("www."):
+            tries.append((url.replace("://" + host, "://www." + host, 1), True))
+        best = None
+        for u, human in tries:
+            body = {"urls": [u], "human_mode": True} if human else {"urls": [u]}
+            resp, meta = crust.call(self.id, "/web/enrich/live", body)
+            page = first_list(resp)[0] if first_list(resp) else {}
+            text = visible_text(page.get("content"))
+            got = {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000],
+                   "url": page.get("url") or u, "meta": meta, "fetched_with": "human_mode" if human else "standard"}
+            if got["ok"] and len(text) >= 200:
+                return got
+            if best is None or len(text) > len(best["text"]):
+                best = got
+            store.log(self.id, f"website {u} ({got['fetched_with']}) returned {len(text)} chars; trying the next way")
+        return best
 
     # ---------- step 4: registry identifiers from the web ----------
     # ---------- page verification: never cite a search snippet or a redirect ----------
@@ -441,7 +458,7 @@ class Job:
             w = self.step("website", lambda: self.s_website(url))
             wsrc = crust.source_ref(w["meta"], "page title / text", url=w["url"])
             if not w["ok"] or len(w["text"]) < 200:
-                self.flag("amber", f"Website {url} did not load or has almost no content", wsrc)
+                self.flag("amber", f"Website {url} did not load or has almost no content, even with a browser-like fetch", wsrc)
             else:
                 # rules decide; Jev can add a flag or the sentence to quote, never remove a flag
                 toks = norm_tokens(legal)
