@@ -256,13 +256,6 @@ client gets its own database (`VENDORCHECK_DB`) and data folder (`VENDORCHECK_DA
 - **Cloud OCR for bill photos.** Free tiers let the provider read or train on uploads, and the photo carries
   bank details. Bills are read on the machine instead, for ₹0.
 
-## What we left out
-
-- MCA/GST registry lookups: no public API, and the portals use CAPTCHAs, which we do not bypass.
-- Real bank rails or penny drop. Payments go to a simulated ledger and a simulated payout API, both keyed
-  by idempotency key.
-- PEP and sanctions screening, domain age, and a Tally or Zoho Books connector.
-
 ## What it could do in the future
 
 | Next | Why not today |
