@@ -49,6 +49,8 @@ HTTP API (for another system to call): `POST /cases`, `GET /cases/<id>`, `GET /a
 
 ## How it works
 
+The architecture diagram is drawn live on the app's **Overview** page (`python3 -m vendorcheck.cli serve`, then open http://127.0.0.1:8080). The same flow as Mermaid:
+
 ```mermaid
 flowchart LR
   IN[Inbox: .txt / .eml / upload] --> CL[Classify: invoice / bank change / receipt / reminder]

@@ -57,6 +57,18 @@ class H(BaseHTTPRequestHandler):
             self.send_header("content-type", "text/html; charset=utf-8")
             self.end_headers()
             return self.wfile.write(b)
+        if p.startswith("/static/"):
+            name = os.path.basename(p)
+            fp = os.path.join(os.path.dirname(__file__), "static", name)
+            if not os.path.isfile(fp):
+                return self._json({"error": "not found"}, 404)
+            ctype = {".woff2": "font/woff2", ".woff": "font/woff", ".otf": "font/otf", ".ttf": "font/ttf", ".svg": "image/svg+xml"}.get(os.path.splitext(name)[1], "application/octet-stream")
+            b = open(fp, "rb").read()
+            self.send_response(200)
+            self.send_header("content-type", ctype)
+            self.send_header("content-length", str(len(b)))
+            self.end_headers()
+            return self.wfile.write(b)
         if p == "/api/invoices":
             return self._json([_inv_row(r) for r in ap.invoices()])
         if p.startswith("/api/invoices/"):

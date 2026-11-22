@@ -8,3 +8,5 @@ __pycache__/
 *.pyc
 context/*.pdf
 context/*.PDF
+vendorcheck/static/*.woff2
+vendorcheck/static/*.otf
