@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payables Desk</title>
+<style>
+:root{
+  --bg:#0d1526; --panel:#111c33; --line:#22304f; --text:#e8ecf5; --muted:#8a96b2;
+  --accent:#384ce3; --paid:#29735c; --held:#c27a12; --bad:#c0392b; --money:#e4f222;
+  --serif: Georgia, "Times New Roman", serif; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--line)}
+header h1{font-family:var(--serif);font-weight:400;font-size:22px;margin:0}
+.live{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em}
+nav{margin-left:auto;display:flex;gap:4px}
+nav button,.btn{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:4px;padding:6px 12px;cursor:pointer;font:inherit}
+nav button.on{border-color:var(--accent);color:#fff;background:#1a2550}
+.btn.primary{border-color:var(--accent);background:var(--accent);color:#fff}
+.btn.pay{background:var(--money);color:#111;border-color:var(--money);font-weight:600}
+main{padding:20px;max-width:1200px;margin:0 auto}
+.lbl{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+table{width:100%;border-collapse:collapse} th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:400;text-transform:uppercase;letter-spacing:.06em}
+tr.row:hover{background:#15213d;cursor:pointer}
+.chip{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid;white-space:nowrap}
+.paid{color:#7fd3b5;border-color:var(--paid)} .held{color:#f0b45a;border-color:var(--held)} .duplicate,.rejected{color:#ff8a7a;border-color:var(--bad)}
+.awaiting_approval,.approved{color:#aab6ff;border-color:var(--accent)} .running{color:var(--muted);border-color:var(--line)}
+.pass{color:#7fd3b5} .fail,.unavailable{color:#ff8a7a} .warn{color:#f0b45a}
+.card{border:1px solid var(--line);border-radius:4px;background:var(--panel);padding:16px;margin-bottom:16px}
+.verdict{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.verdict h2{font-family:var(--serif);font-weight:400;font-size:26px;margin:4px 0}
+.score{font-family:var(--mono);font-size:32px}
+.mono{font-family:var(--mono);font-size:12px} .muted{color:var(--muted)}
+a{color:#8ea0ff} pre{white-space:pre-wrap;font-family:var(--mono);font-size:12px;background:#0a1120;border:1px solid var(--line);padding:12px;border-radius:4px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px} @media(max-width:800px){.grid{grid-template-columns:1fr}}
+.ev{font-size:12px;color:var(--muted);margin-top:4px}
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+textarea{width:100%;min-height:140px;background:#0a1120;color:var(--text);border:1px solid var(--line);border-radius:4px;font-family:var(--mono);font-size:12px;padding:10px}
+input{background:#0a1120;color:var(--text);border:1px solid var(--line);border-radius:4px;padding:6px 8px;font:inherit}
+</style>
+</head>
+<body>
+<header>
+  <h1>Payables Desk</h1><span class="live">● VENDOR TRUST + PAY-ONCE</span>
+  <nav><button data-v="queue" class="on">Inbox</button><button data-v="ledger">Ledger</button><button data-v="log">Activity</button><button data-v="vendor">Vendor check</button></nav>
+</header>
+<main id="app"></main>
+<script>
+const $=s=>document.querySelector(s), app=$('#app');
+const inr=n=>n==null?'—':'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2});
+const ts=t=>t?new Date(t*1000).toLocaleString('en-IN'):'—';
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=async(p,b)=>{const r=await fetch(p,b?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)}:{});return r.json()};
+let view='queue';
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));render()});
+
+async function render(arg){ if(view==='queue')return queue(); if(view==='case')return caseView(arg); if(view==='ledger')return ledger(); if(view==='log')return activity(); if(view==='vendor')return vendorForm(); }
+
+async function queue(){
+  const rows=await api('/api/invoices');
+  app.innerHTML=`<div class="toolbar"><button class="btn primary" id="proc">Process inbox</button>
+   <button class="btn" id="up">Drop a document</button><span class="muted" id="msg"></span></div>
+   <div id="drop" style="display:none" class="card"><div class="lbl">Paste an invoice or email</div>
+   <input id="fname" placeholder="name e.g. 08_new_invoice.txt" style="margin:8px 0;width:320px"><textarea id="txt"></textarea>
+   <div style="margin-top:8px"><button class="btn primary" id="send">Process</button></div></div>
+   <table><tr><th>Document</th><th>Invoice</th><th>Vendor</th><th>Amount</th><th>Status</th><th>Risk</th><th>Reason</th></tr>
+   ${rows.map(r=>`<tr class="row" data-k="${esc(r.invoice_key)}"><td class="mono">${esc(r.file)}</td><td class="mono">${esc(r.invoice_no||r.doc_type)}</td><td>${esc(r.vendor_id||'?')}</td>
+   <td class="mono">${inr(r.amount_inr)}</td><td><span class="chip ${r.state}">${r.state.replace('_',' ').toUpperCase()}</span></td><td class="mono">${r.risk_score??''}</td><td class="muted">${esc((r.reason||'').slice(0,140))}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">Inbox not processed yet.</td></tr>'}</table>`;
+  $('#proc').onclick=async()=>{$('#msg').textContent='Running checks on live data…';await api('/api/process',{});queue()};
+  $('#up').onclick=()=>$('#drop').style.display='block';
+  $('#send').onclick=async()=>{$('#msg').textContent='Processing…';await api('/api/upload',{name:$('#fname').value||('upload_'+Date.now()+'.txt'),text:$('#txt').value});queue()};
+  document.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>{view='case';render(tr.dataset.k)});
+}
+
+function srcLink(s){ if(!s)return ''; if(typeof s==='string')return esc(s);
+  const u=s.url?`<a href="${esc(s.url)}" target="_blank">${esc((s.url||'').replace(/^https?:\/\//,'').slice(0,60))}</a>`:esc(s.api||s.source||s.type||'');
+  return `${u}${s.field?` · <span class="mono">${esc(s.field)}</span>`:''}${s.record_date?` · record ${esc(s.record_date)}`:''}${s.retrieved_at?` · retrieved ${esc(s.retrieved_at)}`:''}${s.passage?`<div class="ev">“${esc(String(s.passage).slice(0,220))}”</div>`:''}`;}
+
+async function caseView(key){
+  const c=await api('/api/invoices/'+encodeURIComponent(key)); const d=c.decision, x=c.extracted, t=d.trust_report;
+  const canPay=c.invoice.state==='awaiting_approval', canRe=c.invoice.state==='held';
+  app.innerHTML=`<div class="toolbar"><button class="btn" id="back">← Inbox</button><span class="mono muted">${esc(key)}</span></div>
+  <div class="card verdict"><div><div class="lbl">Decision</div><h2><span class="chip ${c.invoice.state}" style="font-size:16px">${c.invoice.state.replace('_',' ').toUpperCase()}</span></h2>
+   <div style="max-width:620px">${esc(d.reason)}</div>
+   ${c.payment?`<div style="margin-top:8px" class="mono">Paid ${inr(c.payment.amount_inr)} → ${esc(c.payment.payee)} a/c ${esc(c.payment.account)} · ref ${esc(c.payment.ref)} · approved by ${esc(c.payment.approved_by)}</div>`:''}
+   <div class="toolbar" style="margin-top:12px">${canPay?`<input id="who" placeholder="Approver name" value="AP lead"><button class="btn pay" id="pay">Approve & pay ${inr(x.amount_inr)}</button>`:''}
+   ${canRe?`<button class="btn" id="re">Replay checks</button>`:''}<span id="m" class="muted"></span></div></div>
+   <div><div class="lbl">Risk score</div><div class="score">${d.risk_score??0}</div><div class="lbl" style="margin-top:8px">Job cost</div><div class="mono">${t?`${t.cost.credits} credits · ₹${t.cost.inr}`:'0 credits'}</div></div></div>
+  <div class="card"><div class="lbl">Signal breakdown</div><table><tr><th>Signal</th><th>Result</th><th>Weight</th><th>Contribution</th></tr>
+   ${d.breakdown.map(b=>`<tr><td>${esc(b.signal)}</td><td class="${b.result}">${b.result}</td><td class="mono">${b.weight}</td><td class="mono">${b.contribution}</td></tr>`).join('')}</table></div>
+  <div class="card"><div class="lbl">Checks and evidence</div><table><tr><th>Check</th><th>Result</th><th>Reasoning and evidence</th></tr>
+   ${d.checks.map(k=>`<tr><td>${esc(k.check)}<div class="ev mono">${esc(k.fetched_at)}</div></td><td class="${k.result}">${k.result}</td><td>${esc(k.reasoning)}
+   ${(k.evidence||[]).slice(0,12).map(e=>`<div class="ev">${e.claim?`<b>${esc(e.claim)}:</b> ${esc(e.value)} — `+srcLink(e.source):`${esc(e.source)} · ${esc(e.field)}: <span class="mono">${esc(e.value)}</span>`}</div>`).join('')}</td></tr>`).join('')}</table></div>
+  ${t?`<div class="grid"><div class="card"><div class="lbl">Vendor check · ${esc(t.verdict)}</div><p>${esc(t.summary)}</p>
+   <div class="lbl">Adverse media screen</div><div class="mono">found ${t.screening.hits_found} · cleared ${t.screening.hits_cleared} · escalated ${t.screening.hits_escalated}</div>
+   ${t.flags.length?`<div class="lbl" style="margin-top:10px">Flags</div>`+t.flags.map(f=>`<div class="${f.severity==='red'?'fail':'warn'}">● ${esc(f.reason)}</div><div class="ev">${srcLink(f.source)}</div>`).join(''):''}</div>
+   <div class="card"><div class="lbl">Cannot verify</div>${t.cannot_verify.length?t.cannot_verify.map(m=>`<div class="warn">○ ${esc(m)}</div>`).join(''):'<div class="muted">Nothing outstanding</div>'}</div></div>`:''}
+  ${d.draft_message?`<div class="card"><div class="lbl">Drafted message — not sent</div><div class="mono" style="margin:6px 0">To ${esc(d.draft_message.to)} · call back ${esc(d.draft_message.phone_to_call_back)}</div><pre>${esc(d.draft_message.subject+'\n\n'+d.draft_message.body)}</pre><div class="ev">${esc(d.draft_message.note)}</div></div>`:''}
+  <div class="card"><div class="lbl">Extracted fields</div><pre>${esc(JSON.stringify(x,null,2))}</pre></div>
+  <div class="card"><div class="lbl">Audit trail</div><table>${c.events.map(e=>`<tr><td class="mono muted">${ts(e.at)}</td><td class="mono">${esc(e.job_id)}</td><td>${esc(e.msg)}</td></tr>`).join('')}</table></div>`;
+  $('#back').onclick=()=>{view='queue';render()};
+  if(canPay)$('#pay').onclick=async()=>{const r=await api('/api/approve',{key,by:$('#who').value});$('#m').textContent=JSON.stringify(r);caseView(key)};
+  if(canRe)$('#re').onclick=async()=>{$('#m').textContent='Re-running…';const r=await api('/api/recheck',{key});alert('Before: '+r.before?.state+'\nAfter: '+r.after?.state);view='queue';render()};
+}
+
+async function ledger(){
+  const p=await api('/api/payments');
+  app.innerHTML=`<div class="card"><div class="lbl">Simulated payment ledger · one row per invoice, enforced by idempotency key</div><table>
+  <tr><th>Paid at</th><th>Idempotency key</th><th>Payee</th><th>Account</th><th>Amount</th><th>Approved by</th><th>Ref</th></tr>
+  ${p.map(r=>`<tr><td class="mono">${ts(r.paid_at)}</td><td class="mono">${esc(r.idempotency_key)}</td><td>${esc(r.payee)}</td><td class="mono">${esc(r.account)} / ${esc(r.ifsc)}</td><td class="mono" style="color:var(--money)">${inr(r.amount_inr)}</td><td>${esc(r.approved_by)}</td><td class="mono">${esc(r.ref)}</td></tr>`).join('')||'<tr><td colspan=7 class="muted">No payments yet.</td></tr>'}</table></div>`;
+}
+async function activity(){
+  const e=await api('/api/events');
+  app.innerHTML=`<div class="card"><div class="lbl">Agent activity (newest first)</div><table>${e.map(r=>`<tr><td class="mono muted">${ts(r.at)}</td><td class="mono">${esc(r.job_id)}</td><td class="${r.level==='warn'?'warn':r.level==='error'?'fail':''}">${esc(r.msg)}</td></tr>`).join('')}</table></div>`;
+}
+function vendorForm(){
+  app.innerHTML=`<div class="card"><div class="lbl">Vendor check (5.1 + 5.2) on its own</div><div class="toolbar" style="margin-top:8px">
+  <input id="vn" placeholder="Vendor name"><input id="vw" placeholder="Website"><input id="vd" placeholder="Director (optional)"><button class="btn primary" id="go">Check</button><span id="m" class="muted"></span></div><div id="out"></div></div>`;
+  $('#go').onclick=async()=>{$('#m').textContent='Checking live sources…';const r=await api('/cases',{vendor_name:$('#vn').value,website:$('#vw').value,director:$('#vd').value});$('#m').textContent='';
+   $('#out').innerHTML=r.error?`<div class="fail">${esc(r.error)}</div>`:`<h2 style="font-family:var(--serif);font-weight:400">${esc(r.verdict)}</h2><p>${esc(r.summary)}</p>
+   <table><tr><th>Fact</th><th>Value</th><th>Source</th></tr>${r.facts.map(f=>`<tr><td>${esc(f.claim)}</td><td>${esc(f.value)}</td><td>${srcLink(f.source)}</td></tr>`).join('')}</table>
+   ${r.flags.map(f=>`<div class="${f.severity==='red'?'fail':'warn'}">● ${esc(f.reason)}</div>`).join('')}
+   ${r.cannot_verify.map(m=>`<div class="warn">○ cannot verify: ${esc(m)}</div>`).join('')}<div class="mono muted" style="margin-top:8px">cost ${r.cost.credits} credits · ₹${r.cost.inr} · ${r.elapsed_s}s</div>`};
+}
+render();
+</script>
+</body>
+</html>
