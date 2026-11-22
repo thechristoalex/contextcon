@@ -1,0 +1,6 @@
+[
+  {"po_no": "PO-1001", "vendor_id": "V001", "amount_inr": 236000.00, "qty": 400, "item": "Last-mile deliveries, Bengaluru, Oct 2026"},
+  {"po_no": "PO-1002", "vendor_id": "V003", "amount_inr": 412500.00, "qty": 15, "item": "FTL Ahmedabad-Pune, 15 trips"},
+  {"po_no": "PO-1003", "vendor_id": "V002", "amount_inr": 158400.00, "qty": 120, "item": "Surface express, Gurugram-Jaipur"},
+  {"po_no": "PO-1004", "vendor_id": "V001", "amount_inr": 88500.00, "qty": 150, "item": "Hyperlocal deliveries, Nov 2026"}
+]

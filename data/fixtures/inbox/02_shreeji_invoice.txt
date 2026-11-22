@@ -1,0 +1,13 @@
+From: Billing <billing@shreejicargomovers-india.com>
+Subject: Invoice SCM-778
+
+TAX INVOICE
+Vendor: Shreeji Cargo Movers Private Limited
+GSTIN: 24AAAAA0003A1Z5
+Invoice No: SCM-778
+Invoice Date: 15 Nov 2026
+PO No: PO-1002
+Qty: 15
+Total: Rs. 4,12,500.00
+Account No: 38291000555666  IFSC: ICIC0000789
+Account Name: Shreeji Cargo Movers Private Limited

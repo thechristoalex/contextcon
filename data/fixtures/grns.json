@@ -1,0 +1,6 @@
+[
+  {"grn_no": "GRN-5001", "po_no": "PO-1001", "qty_received": 400, "date": "2026-11-05"},
+  {"grn_no": "GRN-5002", "po_no": "PO-1002", "qty_received": 15, "date": "2026-11-12"},
+  {"grn_no": "GRN-5003", "po_no": "PO-1003", "qty_received": 120, "date": "2026-11-14"},
+  {"grn_no": "GRN-5004", "po_no": "PO-1004", "qty_received": 150, "date": "2026-11-18"}
+]

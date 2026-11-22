@@ -1,0 +1,14 @@
+From: Shadowfax Accounts <accounts@shadowfax.in>
+Subject: Tax Invoice INV/2026/0451
+
+TAX INVOICE
+Vendor: Shadowfax Technologies Limited
+GSTIN: 29AAAAA0001A1Z5
+Invoice No: INV/2026/0451
+Invoice Date: 10 Nov 2026
+PO No: PO-1001
+Description: Last-mile deliveries, Bengaluru, Oct 2026
+Qty: 400
+Total Amount Payable: INR 2,36,000.00
+Bank: Account No: 50200011112222  IFSC: HDFC0000123
+Account Name: Shadowfax Technologies Limited

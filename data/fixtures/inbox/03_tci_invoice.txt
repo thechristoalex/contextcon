@@ -1,0 +1,13 @@
+From: TCI Express Vendor Desk <vendors@tciexpress.in>
+Subject: Invoice TCIE/26-27/3390
+
+TAX INVOICE
+Vendor: TCI Express Limited
+GSTIN: 06AAAAA0002A1Z5
+Invoice No: TCIE/26-27/3390
+Invoice Date: 16 Nov 2026
+PO No: PO-1003
+Qty: 120
+Grand Total: ₹1,58,400.00
+Account No: 912020033334444  IFSC: UTIB0000456
+Account Name: TCI Express Limited

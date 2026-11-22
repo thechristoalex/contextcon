@@ -69,6 +69,37 @@ CREATE TABLE IF NOT EXISTS vendor_master (
   job_id TEXT NOT NULL,
   added_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS invoices (
+  invoice_key TEXT PRIMARY KEY,      -- vendor_id + normalised invoice number (idempotency key for payment)
+  source_file TEXT NOT NULL,
+  doc_type TEXT NOT NULL,
+  vendor_id TEXT,
+  extracted_json TEXT NOT NULL,
+  state TEXT NOT NULL,               -- received | extracted | matched | verified | awaiting_approval | approved | paid | held | duplicate | rejected
+  decision_json TEXT,
+  vendor_hash_at_approval TEXT,
+  created_at REAL NOT NULL,
+  updated_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS files_seen (
+  source_file TEXT PRIMARY KEY,
+  content_hash TEXT NOT NULL,
+  invoice_key TEXT,
+  outcome TEXT,
+  at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS payments (
+  idempotency_key TEXT PRIMARY KEY,  -- one invoice = at most one payment
+  invoice_key TEXT NOT NULL,
+  vendor_id TEXT NOT NULL,
+  amount_inr REAL NOT NULL,
+  account TEXT NOT NULL,
+  ifsc TEXT NOT NULL,
+  payee TEXT NOT NULL,
+  approved_by TEXT NOT NULL,
+  paid_at REAL NOT NULL,
+  ref TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   job_id TEXT,
