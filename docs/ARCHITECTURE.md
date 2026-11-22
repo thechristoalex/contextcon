@@ -15,7 +15,9 @@ never repeats a paid API call or a payment.
                  │ crust.py     Crustdata client: cache, budget, retry, cost ledger      │
                  │ store.py     SQLite (WAL): jobs, steps, http_cache, ledger, invoices, │
                  │              payments, actions, files_seen, events, bank_lines        │
-                 │ server.py    ThreadingHTTPServer: JSON API + ui.html + landing.html   │
+                 │ procure/     onboarding → uploaded invoices → bills → payments made   │
+                 │              (state machines, domain events, idempotency keys)        │
+                 │ server.py    ThreadingHTTPServer: JSON API + ui/landing/portal pages  │
                  │ cli.py       argparse front end over the same functions               │
                  └──────────────────────────────────────────────────────────────────────┘
                         │                         │                         │
@@ -35,6 +37,11 @@ never repeats a paid API call or a payment.
 | `server.py` | 210 | HTTP routing, single-writer lock, startup recovery |
 | `jev.py` | 177 | Typed-question client, redaction, threshold mapping, sentence-id citations |
 | `crust.py` | 112 | HTTP client with hash cache, credit budget and backoff |
+| `procure/onboarding.py` | 350 | Vendor portal sign-up, submission checks, approval flow, bank-change re-approval |
+| `procure/invoices.py` | 484 | Upload intake chain, deterministic invoice UUIDs, document → bill, bill balance |
+| `procure/payables.py` | 405 | Payments Made: idempotent requests, reservation rules, `PayCommand`, payout dedupe |
+| `procure/core.py` | 130 | `tx()`, compare-and-set `StateMachine`, in-process `EventBus`, audit table |
+| `procure/api.py` | 142 | Router for `/api/procure/*` and `/api/portal/*` |
 
 ## 1. Design invariants
 
@@ -59,7 +66,8 @@ These hold for every code path. The tests in `tests/` assert them.
 
 One SQLite file (`data/vendorcheck.db`, override `VENDORCHECK_DB`), `journal_mode=WAL`,
 `isolation_level=None` (autocommit, explicit `BEGIN IMMEDIATE` where atomicity matters), one shared
-connection guarded by a process-wide `threading.Lock`.
+connection guarded by a process-wide `threading.RLock` (re-entrant, so a read inside a
+`procure.core.tx()` write on the same thread does not deadlock).
 
 | Table | Primary key | Purpose |
 |---|---|---|
@@ -73,6 +81,7 @@ connection guarded by a process-wide `threading.Lock`.
 | `actions` | `idempotency_key` | Proposed irreversible actions (`add_to_vendor_master`), approval state |
 | `bank_lines` | `line_key` | Posted statement lines, result, payee, account, claimed `payment_key` |
 | `events` | autoinc | Append-only activity log, keyed by job id |
+| `proc_*`, `sim_bank_transfers` | see §8 | Procurement services; created lazily by `core.ensure()` |
 
 `job_credits(job_id) = SUM(ledger.credits)` is the budget meter. Cache hits are ledgered at 0 credits,
 so `paid_calls` and `cache_hits` are both reported per job.
@@ -319,12 +328,121 @@ Per line, in order:
 Each line runs as its own job `bank:<file>:<n>`, so the credit limit is per line. Repeated merchants
 are answered from `http_cache`.
 
-## 8. HTTP surface (`server.py`)
+## 8. Procurement services (`procure/`)
+
+Three services follow Zoho Procurement's flows: vendor onboarding with a vendor portal, uploaded
+invoices converted to bills, and Payments Made. They share the SQLite file but own disjoint `proc_*`
+tables. They communicate through `core.BUS` events (`vendor.submitted`, `vendor.approved`,
+`vendor.bank_changed`, `vendor.inactive`, `invoice.uploaded`, `bill.opened`, `payment.paid`), and
+handlers run after the publishing transaction commits. Each service can therefore move to its own
+process with the event names mapped to topics.
+
+**Shared primitives (`core.py`).** `tx()` = `store._lock` + `BEGIN IMMEDIATE … COMMIT/ROLLBACK`.
+`StateMachine(table, id_col, transitions).move(conn, id, frm, action, **cols)` validates `action ∈ T[frm]`,
+then runs `UPDATE … SET status=to WHERE id=? AND status=frm`. If `rowcount ≠ 1`, it raises 409 (lost
+race), otherwise it appends a `proc_audit` row in the same transaction. `DomainError(msg, code)` carries
+the HTTP status, so services never import the server.
+
+### 8.1 Vendor onboarding (`onboarding.py`)
+
+| From | Action → To |
+|---|---|
+| `draft`, `invited` | `submit` → `approval_pending`; `invited` also `cancel_invite` → `cancelled` |
+| `approval_pending` | `approve` → `active`; `request_more_details` → `pending_review`; `reject` → `rejected` |
+| `pending_review`, `rejected` | `submit` → `approval_pending` |
+| `active` | `mark_inactive` → `inactive`; `bank_change` → `approval_pending` |
+| `inactive` | `mark_active` → `active` |
+
+The portal is authorised by an `invite_token` (`UNIQUE`) carried in the URL fragment. On submission a
+Strategy list runs: required fields; GSTIN check character, plus PAN holder type `C` when the name says
+Limited/Pvt; IFSC regex; holder-vs-legal-name similarity; email domain vs website (free mail warns);
+GSTIN or bank account already owned by another vendor (fail). The §5 trust job runs on a daemon thread
+with `request_id = onb-<vendor>-<ts>`. Any exception records `CANNOT_VERIFY`, never a pass. A failed
+check blocks `approve`. An `active` vendor that edits bank details goes back to `approval_pending` with
+`bank_verified_on = NULL` and a call-back warning, and emits `vendor.bank_changed`.
+`active_master()` projects active vendors into the shape of `vendors.json`, and `ap.vendors()` merges
+them in with `setdefault`, so the client's fixture file wins on id collision.
+
+### 8.2 Uploaded invoices → bills (`invoices.py`)
+
+| Id | Derivation | Names |
+|---|---|---|
+| `doc_uuid` | `uuid4()` at upload | One uploaded file (every resend gets a new one) |
+| `invoice_uuid` | `uuid5(INVOICE_NS, "<vendor_id>:<norm_invoice_no>")` | The invoice, on any machine, under any numbering format. Becomes `proc_bills.bill_uuid` |
+
+`INVOICE_NS` is a fixed constant. Changing it would re-identify every invoice and break de-duplication.
+
+Intake is a Chain of Responsibility. A handler appends checks to `ctx` or raises `Stop(result)`:
+
+```
+FileGuard          size ≤ 5 MB, magic-byte sniff (PDF/JPEG/PNG/HEIC, else UTF-8 text/eml)
+VendorGuard        vendor exists and may upload
+ExactFileDedupe    UNIQUE(vendor_id, sha256) → return the first doc_uuid, nothing stored
+Store              write <uploads>/<doc_uuid>.<ext>
+Read               Strategy by type: text | pdftotext -layout | scan.read_image → rows;
+                   typed form fields vs document text → `typed_vs_document` fail on mismatch
+Identify           norm invoice no → invoice_key, invoice_uuid; missing number or amount → fail
+DuplicateInvoice   bill with this uuid, or pending doc with this uuid → fail;
+                   same vendor + amount within 30 days → warn (re-numbered duplicate)
+PurchaseOrderMatch PO exists / this vendor / not over-billed / GRN qty  (no PO or no GRN → warn)
+BankOnInvoice,
+GstinOnInvoice     reuse ap.check_bank / ap.check_gstin
+```
+
+`HARD_FAILS = {duplicate_invoice, invoice_identity, bank_details, typed_vs_document, amount}` block
+*Convert to Bill*. `accept()` inserts the bill with `bill_uuid = invoice_uuid` and
+`invoice_key UNIQUE`, so a second bill for the same invoice is refused by the database
+(`IntegrityError` → 409), not by application logic. The bill snapshots `vendor_bank = account|ifsc`.
+
+Bill transitions: `draft → pending_approval → open → partially_paid → paid`, `pending_approval →
+rejected → pending_approval`, `draft|rejected|open → void → draft`. Column constraint
+`balance REAL CHECK (balance >= 0 AND balance <= amount)`. `apply_payment` decrements with
+`UPDATE … SET balance = balance - ? WHERE bill_uuid=? AND balance >= ?`, a compare-and-set that
+cannot go negative, then moves the bill to `pay` or `part_pay` in the same transaction.
+
+### 8.3 Payments Made (`payables.py`)
+
+| From | Action → To |
+|---|---|
+| `draft` | `submit` → `pending_approval`; `void` → `void` |
+| `pending_approval` | `approve` → `processing`; `reject` → `rejected`; `void` → `void` |
+| `rejected` | `submit` → `pending_approval`; `void` → `void` |
+| `processing` | `settle` → `paid`; `hold` → `pending_approval` |
+| `void` | `convert_to_draft` → `draft` |
+
+Double payment is blocked at three layers:
+
+1. **Request** (`@idempotent(scope)` decorator on `create` and `approve`). The `Idempotency-Key`
+   header is required. Row `proc_idempotency(idem_key, scope)` with `request_hash =
+   sha256(scope ‖ canonical body)`. A first call inserts `in_progress`, runs, and stores
+   `(code, response)` as `completed`. 4xx business answers are final for that key. A replay with the same
+   hash returns the stored response with `idempotent_replay: true`. A different hash returns 422. A
+   replay while the first call is still `in_progress` returns 409. An unexpected exception deletes the
+   row so the client can retry.
+2. **Domain.** Rules run on create, submit and approve: vendor active with a verified account; every bill
+   `open|partially_paid` and owned by the vendor; `amount ≤ balance − reserved`, where
+   `reserved = Σ allocations of other payments in {draft, pending_approval, rejected, processing}`;
+   same vendor and amount within 30 days → warn, which needs an approver note. `create` re-checks
+   reservations inside its write transaction, so concurrent creates against one bill serialise and only
+   those that fit are recorded.
+3. **Execution** (`PayCommand`). `approve` commits `processing` together with a snapshot
+   `pay_to_account/ifsc/name` *before* any money moves. `execute()` re-reads the vendor. If the account
+   differs from the snapshot and no transfer exists for this payment, the payment goes to `hold` →
+   `pending_approval`. Otherwise it calls `SimBank.transfer(idem_key = payment_id, …)`, which does
+   `INSERT OR IGNORE` into `sim_bank_transfers` (PK `idem_key`) and refuses a reused key carrying
+   different details. Settlement then applies allocations to bills and moves to `paid` in one
+   transaction. `resume()` re-executes every `processing` payment. A crash after the transfer
+   (`PROCURE_CRASH_AFTER_TRANSFER=1`) is finished without a second transfer, because the bank returns
+   the existing row. Subscriber `vendor.bank_changed` → `execute()` on that vendor's `processing`
+   payments, which holds them.
+
+## 9. HTTP surface (`server.py`)
 
 `ThreadingHTTPServer` on `127.0.0.1`. Reads are concurrent (WAL). Every mutating route that runs the
 pipeline (`/api/process`, `/api/upload`, `/api/scan`, `/api/bank`, `/api/recheck`, `/cases`) takes one
-process-wide `_busy` lock, so pipeline writers are serialised and SQLite never sees two concurrent
-`BEGIN IMMEDIATE`. `ui.html` is re-read per request, while Python modules load once at start.
+process-wide `_busy` lock, so pipeline writers are serialised. `/api/procure/*` and `/api/portal/*` are
+dispatched to `procure.api.route` without `_busy`. Their atomicity comes from `tx()` and the
+compare-and-set transitions, and they also run concurrently with the pipeline. `ui.html` is re-read per request, while Python modules load once at start.
 
 | Method | Path | Handler |
 |---|---|---|
@@ -339,10 +457,16 @@ process-wide `_busy` lock, so pipeline writers are serialised and SQLite never s
 | POST | `/api/bank {name, csv}` | `post_file` |
 | POST | `/api/settings` | Live update of limits and Jev thresholds (clamped to [0, 1]) |
 | POST | `/cases {vendor_name, website, director, gstin}` | Standalone vendor check |
+| GET | `/portal` | Vendor portal page (`#t=<invite token>`) |
+| GET/POST | `/api/portal/{me,profile,documents,invoices}` | Vendor side, authorised by token |
+| GET/POST | `/api/procure/vendors[/<id>[/<action>]]`, `/vendors/invite` | Onboarding |
+| GET/POST | `/api/procure/documents[/<uuid>[/file, /accept, /reject]]` | Uploaded invoices |
+| GET/POST | `/api/procure/bills[/<uuid>/<action>]` | Bills |
+| GET/POST | `/api/procure/payments[/<id>/<action>]`, `/unpaid-bills`, `/payments/resume` | Payments; `create` and `approve` need `Idempotency-Key` |
 
-Startup: open DB → `ap.resume()` → background `scan.warm()` → `serve_forever`.
+Startup: open DB → `ap.resume()` → `PayablesService.resume()` → background `scan.warm()` → `serve_forever`.
 
-## 9. Failure model
+## 10. Failure model
 
 | Fault | Where it lands | Result |
 |---|---|---|
@@ -360,10 +484,15 @@ Startup: open DB → `ap.resume()` → background `scan.warm()` → `serve_forev
 | OCR unreadable | `check_legibility` | `HELD: cannot read` |
 | Prompt injection in the document | Jev `injection` + sentence quote | `HELD` |
 | Look-alike sender | Levenshtein ≤ 3 | `HELD` |
+| Double-click / retried POST on a payment | `proc_idempotency` | First response replayed |
+| Concurrent payments against one bill | reservation re-check in `tx()` + `balance` CAS | Only payments that fit the balance are recorded |
+| Crash after bank transfer, before settle | `sim_bank_transfers` PK | `resume()` settles; no second transfer |
+| Vendor edits bank details in portal | `vendor.bank_changed` | Vendor → `approval_pending`; in-flight payments held |
+| Same invoice uploaded under another number format | `uuid5` = `bill_uuid` PK | Second bill refused by the database |
 
-## 10. Testing
+## 11. Testing
 
-`python3 -m unittest discover tests` runs 96 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
+`python3 -m unittest discover tests` runs 106 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
 removes `TYPESAFE_API_KEY` before import. Crustdata is replaced by canned responses keyed by endpoint.
 Each test case runs against a fresh `tempfile.mkdtemp()` database and data directory.
 
@@ -374,4 +503,18 @@ Each test case runs against a fresh `tempfile.mkdtemp()` database and data direc
 | `test_background.py` | 21 | Unknown-sender checks, PAN types, free mail, GSTIN-only, outage + replay, www fallback |
 | `test_payables.py` | 9 | Every inbox outcome, idempotent re-run, crash-resume, vendor-hash guard, outage hold |
 | `test_bank.py` | 9 | Statement end to end, legal-name rules, re-import, one-payment reconciliation, budget |
+| `test_procure.py` | 10 | Onboarding flow and front-company block, shared bank account, invoice-number formats, file re-upload, key replay/misuse, crash after transfer, 6 concurrent payments → 1 recorded, bank change before transfer |
 | `test_website.py` | 5 | Fetch fallback order and human_mode |
+
+## 12. Controls → code
+
+| Control | Enforced in |
+|---|---|
+| A person approves every payment; approver name recorded | `ap.approve`, `PayablesService.approve` |
+| No message is sent; call-back texts are drafts addressed from the vendor master | `ap.draft_bank_verification` |
+| "Cannot verify" instead of a guess, with the missing evidence named | `Job.missing`, `bank.decide`, `check_legibility` |
+| Namesakes stored as a count and a reason only | `Job.s_adverse` |
+| Only fetched pages are cited; no snippets, no redirect URLs | `Job.verify_pages`, `is_redirect` |
+| Model output can hold, never clear | `ap.settle_doc_type`, `ap.document_signals`, `Job.read_website` |
+| Identifiers redacted before any model call | `jev.redact` |
+| Bill photos never leave the machine | `scan.read_image` (local subprocess only) |

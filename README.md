@@ -8,7 +8,7 @@ duplicates, bank-detail changes, look-alike senders and prompt injection. It the
 after a person approves**, or **holds the invoice with a cited reason**. It also reads paper bills
 from a photo on the local machine and reconciles bank-statement lines.
 
-Design, invariants, schema and failure model: **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+Design, invariants, schema and failure model: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 Diagram: [architecture (Mermaid)](https://mermaid.ink/img/pako:eNptVVFv4jgQ_isjXm5XpKDd072gUysILKCyNEdYtKtcH0wyBF8dO7IdWoT6329sJ7SV9gUHe-bzzDffjC-9XBXYG0HvINRzfmTawmrzrwRYrrOl3KuXEQzsi4UhDLAStDS1UKx4hJubW4hXWSyYMfxwHgGXJ8VzJJM9k09AWLJ0_zTmyGvrvyouC9SPDj9eeYjZz2z2YjXLLRw4isKMoECLmiy5sTwnpxJfvMfsp_fYLbNlgdLSpXBCWSg9gnm6Xa4jsEeUYNDdAYWqGJftnmQVeozd0mNMfySXKWXCc2bx7u-9Ht5KpSsmuMHimolUg8ifKQ2GENrr-qxSjbT9gnz7ycOrwyVAAoYzmoCf0cZqGY-3s8d3x1IF2haz-D51-6bZl5rVx3YLiPICa5eAtMQg5k8mAmT5kWiwjZYGmAQ8cTrPKdAT6oLn1l8BkGbp-9ThZNqA243WbJ55tgK8K5OOIBmvwZ5rjGBPFeKyBKs654oZ29YM4Hv2580zO9OmzY8jSB4iKJUqTFdlgnqgNC0woZEVZ8ITAovWe5JNnDSowIwLEwLUnOpeAMtzRyrlV8BRCZfGtWgA22wXgrG6MRb-GnyBPv1-9cd04pZt4HaafYqdEVWHkSg7pezPV0Wg1Dw_RvCMezig7T4NMp0fPwdxhnI4wPF8no3LkmRI5R6RJS-PlqqiuXkCkytNpFGqRgV-ydxVmskzHCjJYSPZiVa2Fzh8Zlp6zEW2mK2mlEKh2cFS9hUaw0r8gCAE1NRbIYjksmgqqj2ra61OTHjRjb2owhZ6u2T8K0uoPIrkMaIWTmebLTzhma7YX7vlnbz9heTknVfZp5RXjWAuopqdKydCKl6JumVlCjcDkh_qM-QuvoHzmjnGlelMKSuNplbSIBmRyD4y2vmTpmrvn27p2n9W3JH7n9oTs-6IljZM-qLhwAkvcq7Sms9v8wMa6WTm2KX5Qu0VWjOQ7KwmaZCcsZSVTyhOd2F4Te6zFZfo6KGZQ8cUuUUadf0OpQ8qzxutXbP5OdCJuqZ0sbgD88RrH8zkPkBOL6mbEw4tchQiLQEs-If-ZVpwIkrQ7Xe-kJPp--GxeNtqB8YkcVVFYuhDTxIhgli-yv2qdn9ZnwpSMuHbCA5aVW4UQq6qmsT5hwH1TLOSaA8JJL8vbXfmQzGq0aQbg9YKipUHnuNdFo_X64ct7Gab5bdfERxpjsOBwmRQo-46w8Pcwia-rGfftsPNdp4Ol9-T1AdL44Z1ySlJT4FoqdnE7nI_btCz18r9TaFeum-mTgS_M1m8meRMFySXH0l4DOYk_MRX1E29VsXtPHJa60XQq-hFYrygh_LSIxor_2QWeGCNsL3X1_8BbgldtA).
 
 | | |
@@ -32,7 +32,7 @@ python3 -m vendorcheck.cli scan path/to/bill.jpg
 python3 -m vendorcheck.cli post-bank-lines data/fixtures/bank_lines_oct2026.csv
 python3 -m vendorcheck.cli vendor --name "TCI Express" --website tciexpress.in --director "Anil Kumar"
 python3 -m vendorcheck.cli serve --port 8080   # landing at /, app at /app
-python3 -m unittest discover tests         # 96 tests, offline, no keys, no credits
+python3 -m unittest discover tests         # 106 tests, offline, no keys, no credits
 ```
 
 Crash test: `CRASH_AFTER_APPROVE=1 python3 -m vendorcheck.cli approve <key> --by X`, then `… resume`.
@@ -61,6 +61,21 @@ The invoice is paid once. A second `resume` or `approve` changes nothing.
 
 A person approves every payment, judges every `HELD` item, and sends any drafted message. The system
 never sends email.
+
+## Procurement services
+
+`vendorcheck/procure/` follows Zoho Procurement's flows: vendor onboarding through a portal
+(`/portal#t=<invite token>`), uploaded invoices converted to bills, and Payments Made. The services
+own separate tables and communicate through domain events.
+
+- An approved vendor joins the vendor master that the invoice desk reads.
+- If a vendor changes its bank details in the portal, it goes back to approval and its payments stop.
+- Each invoice gets `uuid5(vendor:normalised number)` as its bill's primary key, so `KF/2026/0042` and
+  `KF-2026-42` cannot become two bills.
+- Payments are idempotent at three layers: the `Idempotency-Key` header, balance reservation with a
+  compare-and-set decrement, and the payment UUID sent to the payout API as its idempotency key.
+
+Details are in §8 of the architecture doc.
 
 ## Results (live Crustdata, 22 Nov 2026)
 

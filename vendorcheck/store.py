@@ -14,7 +14,7 @@ import time
 
 DB_PATH = os.environ.get("VENDORCHECK_DB", os.path.join(os.path.dirname(__file__), "..", "data", "vendorcheck.db"))
 
-_lock = threading.Lock()
+_lock = threading.RLock()  # reentrant: a read inside a write transaction on the same thread must not deadlock
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS jobs (

@@ -1,0 +1,58 @@
+/* Procurement screens laid out like Zoho Procurement: view dropdown + "+ New" on the list,
+   list and detail side by side, header actions with a "More" menu, upper-case status labels. */
+.zst{font:600 11px/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.zst.active,.zst.paid,.zst.accepted,.zst.open{color:var(--paid)}
+.zst.approval_pending,.zst.pending_approval,.zst.pending,.zst.processing,.zst.invited,.zst.partially_paid{color:var(--wait)}
+.zst.pending_review,.zst.draft,.zst.overdue{color:var(--held)}
+.zst.rejected,.zst.void,.zst.cancelled,.zst.inactive{color:var(--bad)}
+.zlist{display:grid;grid-template-columns:minmax(0,1fr);gap:0;border:1px solid var(--line);border-radius:var(--r);min-height:420px}
+.zlist.split{grid-template-columns:minmax(300px,36%) minmax(0,1fr)}
+.zlist.split .l .pill{display:none}
+.zlist .l{min-width:0;overflow:auto;border-right:1px solid var(--line)}
+.zlist:not(.split) .l{border-right:0}
+.zlist .d{min-width:0;overflow:auto;display:none}
+.zlist.split .d{display:block}
+.zlist .tbl{border:0}
+/* split view: compact list, like Zoho's list beside an open record */
+.zlist.split .t-docs :is(th,td):is(:nth-child(2),:nth-child(3),:nth-child(5)),
+.zlist.split .t-vend :is(th,td):is(:nth-child(2),:nth-child(3),:nth-child(5)),
+.zlist.split .t-bills :is(th,td):is(:nth-child(1),:nth-child(5),:nth-child(6)),
+.zlist.split .t-pay :is(th,td):is(:nth-child(1),:nth-child(4),:nth-child(5)){display:none}
+.zhead{display:flex;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap;background:var(--bg-sub)}
+.zhead h2{margin:0;font-size:16px;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zbody{padding:16px}
+.zsel{height:28px;border:1px solid var(--line-2);border-radius:var(--r);background:var(--bg);font:600 14px var(--sans);padding:0 8px;color:var(--fg)}
+.zmore{position:relative;display:inline-block}
+.zmore .m{position:absolute;right:0;top:32px;background:var(--bg);border:1px solid var(--line-2);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);min-width:200px;z-index:20;display:none;padding:4px}
+.zmore.on .m{display:block}
+.zmore .m button{display:block;width:100%;text-align:left;border:0;background:none;padding:7px 10px;font:13px var(--sans);border-radius:var(--r);cursor:pointer;color:var(--fg)}
+.zmore .m button:hover{background:var(--bg-hover)}
+.zmore .m button.danger{color:var(--bad)}
+.zgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px}
+.zkv{display:grid;grid-template-columns:130px minmax(0,1fr);gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.zkv .k{color:var(--fg-3)}.zkv .v{min-width:0;overflow-wrap:anywhere}
+.zchk{display:grid;grid-template-columns:18px 140px minmax(0,1fr);gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;align-items:start}
+.zchk svg{width:14px;height:14px;margin-top:2px}
+.zuuid{font:500 11px var(--mono);color:var(--fg-2);background:var(--bg-sub);border:1px solid var(--line);border-radius:3px;padding:1px 5px;cursor:pointer}
+.zmodal{position:fixed;inset:0;background:rgba(9,15,23,.36);display:flex;align-items:flex-start;justify-content:center;padding:10vh 16px;z-index:60}
+.zmodal .bx{background:var(--bg);border-radius:var(--r-lg);box-shadow:var(--shadow-pop);width:min(520px,100%);max-height:80vh;overflow:auto}
+.zmodal .hd{padding:14px 18px;border-bottom:1px solid var(--line);font-weight:600;font-size:15px}
+.zmodal .bd{padding:16px 18px;display:grid;gap:10px}
+.zmodal .ft{padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.zmodal label{display:grid;gap:4px;font-size:12px;color:var(--fg-2)}
+.zmodal input,.zmodal textarea,.zmodal select{width:100%}
+.zerr{background:var(--bad-soft);border:1px solid #efc2bc;color:var(--bad);border-radius:var(--r);padding:8px 10px;font-size:12.5px}
+.zinfo{background:var(--blue-soft);border:1px solid #cdd3fb;border-radius:var(--r);padding:8px 10px;font-size:12.5px;color:var(--fg-2)}
+.ztl{font-size:12px;color:var(--fg-2);border-left:2px solid var(--line-2);padding-left:12px;display:grid;gap:8px}
+.zpreview{width:100%;height:420px;border:1px solid var(--line);border-radius:var(--r);background:var(--bg-sub)}
+.zpreview.txt{white-space:pre-wrap;font:12px/1.5 var(--mono);padding:12px;height:auto;max-height:420px;overflow:auto}
+@media (max-width:900px){.zlist.split{grid-template-columns:1fr}.zlist.split .l{display:none}.zgrid{grid-template-columns:1fr}}
+@media (prefers-color-scheme:dark){.zmodal{background:rgba(0,0,0,.55)}}
+.zsub{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 16px;overflow-x:auto}
+.zsub a{padding:8px 12px;color:var(--fg-2);font-weight:500;cursor:pointer;white-space:nowrap;position:relative}
+.zsub a:hover{color:var(--fg)}
+.zsub a.on{color:var(--fg)}.zsub a.on:after{content:"";position:absolute;left:8px;right:8px;bottom:-1px;height:2px;background:var(--blue);border-radius:2px}
+.zlist.split .l .tbl{table-layout:fixed;width:100%}
+.zlist.split .l td,.zlist.split .l th{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.zlist.split .l td>div,.zlist.split .l td>b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.zlist.split .l :is(th,td):last-child{width:118px}
