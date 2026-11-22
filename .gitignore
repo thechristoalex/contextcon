@@ -9,7 +9,6 @@ __pycache__/
 context/*.pdf
 context/*.PDF
 vendorcheck/static/*.woff2
-vendorcheck/static/*.otf
 !vendorcheck/static/*.js
 !vendorcheck/static/*.css
 data/fixtures/statements/
