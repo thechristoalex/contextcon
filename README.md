@@ -72,6 +72,18 @@ Each bank line is posted once. A line's key is its date, description, amount and
 - the cost limit
 - the cost report
 
+### Scanning a paper bill
+
+In the app, **Inbox → Scan a bill** opens the camera: hold the bill in frame and press Capture, or use **Upload / take photo** (on a phone this opens the camera). From the command line: `python3 -m vendorcheck.cli scan path/to/bill.jpg`.
+
+- **Read on this machine, for ₹0.** Apple Vision on a Mac (compiled once from `vendorcheck/vision_ocr.swift`), Tesseract elsewhere. The photo and the bank details on it never leave the laptop. We ruled out free cloud tiers whose terms let the provider read or train on uploads.
+- **Same checks as an emailed invoice.** The rows read from the photo become an inbox document, so duplicates, three-way match, bank and GSTIN checks, the vendor check and pay-once all apply. The only change: a paper bill has no sender, so the sender-domain check reads "not applicable".
+- **Every field cites the photo.** The case view shows the photo with the line each field came from outlined, its row and its confidence.
+- **Never guessed.** A bill whose invoice number, amount, or GSTIN and vendor name cannot be read is held as "cannot read". A field read below `min_read_confidence` (Settings, default 0.5) holds the bill for a person to compare. A GSTIN that fails its check character is reported as "misread or not real", not as fake. A rupee sign misread as another currency sign is corrected only when it sits directly before a number.
+- **Read once.** Files are keyed by the photo's hash: the same photo again is answered from its stored reading, and a second photo of the same bill ends as `DUPLICATE`.
+
+Tests: `python3 -m unittest tests.test_scan -v` (13 run anywhere with a fake reader; 2 use the real reader on the test photos in `data/fixtures/bills/`, made by `tests/make_bills.swift`).
+
 ## How it works
 
 The flow, as Mermaid:

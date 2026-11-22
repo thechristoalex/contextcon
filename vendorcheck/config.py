@@ -42,6 +42,8 @@ CONFIG = {
     "jev_quote_min": 0.50,    # pointing at a sentence to quote (code checks the quote is really in the text)
     "jev_timeout_s": 20,
     "jev_retries": 2,
+    # a field read from a bill photo below this confidence (0..1) holds the bill for a person to compare
+    "min_read_confidence": float(os.environ.get("MIN_READ_CONFIDENCE", "0.5")),
 }
 
 ADVERSE_TERMS = [

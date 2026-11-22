@@ -3,6 +3,7 @@
   python -m vendorcheck.cli inbox                     # process every invoice in data/fixtures/inbox (resumes first)
   python -m vendorcheck.cli file path/to/invoice.txt  # process one document
   python -m vendorcheck.cli approve <invoice_key> --by "Priya (AP lead)"
+  python -m vendorcheck.cli scan path/to/bill.jpg      # photo of a paper bill: read on this machine, then checked
   python -m vendorcheck.cli resume                    # pay anything approved but unpaid (after a crash)
   python -m vendorcheck.cli vendor --name "Shadowfax" --website shadowfax.in [--director "..."]
   python -m vendorcheck.cli status | payments | ledger <job_id>
@@ -20,6 +21,7 @@ def main(argv=None):
     sub.add_parser("inbox").add_argument("--folder")
     sub.add_parser("file").add_argument("path")
     a = sub.add_parser("approve"); a.add_argument("key"); a.add_argument("--by", required=True)
+    sub.add_parser("scan").add_argument("photo")
     sub.add_parser("resume")
     v = sub.add_parser("vendor")
     v.add_argument("--name"); v.add_argument("--website"); v.add_argument("--director"); v.add_argument("--gstin"); v.add_argument("--request-id")
@@ -35,6 +37,10 @@ def main(argv=None):
         out = ap.process_file(x.path)
     elif x.cmd == "approve":
         out = ap.approve(x.key, x.by)
+    elif x.cmd == "scan":
+        from . import scan
+        with open(x.photo, "rb") as f:
+            out = scan.scan_bytes(f.read())
     elif x.cmd == "resume":
         out = ap.resume()
     elif x.cmd == "vendor":
