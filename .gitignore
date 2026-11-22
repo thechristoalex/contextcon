@@ -9,7 +9,6 @@ __pycache__/
 context/*.pdf
 context/*.PDF
 vendorcheck/static/*.woff2
-vendorcheck/static/*.otf
 !vendorcheck/static/*.js
 !vendorcheck/static/*.css
 data/fixtures/statements/
@@ -18,3 +17,5 @@ data/fixtures/statements/
 data/bin/
 data/fixtures/scans/
 data/fixtures/inbox/scan_*.txt
+.venv/
+data/services/

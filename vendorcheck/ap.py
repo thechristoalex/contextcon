@@ -26,8 +26,17 @@ def load(name):
         return json.load(f)
 
 
+def fixture_vendors():
+    return load("vendors.json")
+
+
 def vendors():
-    return {v["vendor_id"]: v for v in load("vendors.json")}
+    """The vendor master: the client's file, plus vendors approved through onboarding (procure service)."""
+    out = {v["vendor_id"]: v for v in fixture_vendors()}
+    from .procure import onboarding
+    for v in onboarding.active_master():
+        out.setdefault(v["vendor_id"], v)
+    return out
 
 
 def vendor_hash(v):
@@ -538,7 +547,7 @@ def _finish(path, chash, key, vendor_id, x, state, checks, draft=None, duplicate
     store.log(f"inv:{os.path.basename(path)}", f"{state.upper()}: {reason[:160]}")
     if state == "awaiting_approval" and x.get("amount_inr") and x["amount_inr"] <= CONFIG.get("auto_approve_below_inr", 0):
         approve(key, "policy:auto-approve-limit")
-    return {"source_file": path, "invoice_key": key, "state": state, "reason": reason, "risk_score": score["risk_score"]}
+    return {"source_file": path, "invoice_key": key or f"unknown:{chash}", "state": state, "reason": reason, "risk_score": score["risk_score"]}
 
 
 def approve(key, who):
