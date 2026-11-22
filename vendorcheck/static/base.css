@@ -1,5 +1,5 @@
 
-@font-face{font-family:"PP Mondwest";src:local("PP Mondwest"),local("PPMondwest-Regular"),url("/static/PPMondwest-Regular.woff2") format("woff2"),url("/static/PPMondwest-Regular.otf") format("opentype");font-display:swap}
+@font-face{font-family:"PP Mondwest";src:local("PP Mondwest"),local("PPMondwest-Regular"),url("/static/PPMondwest-Regular.otf") format("opentype");font-display:swap}
 :root{
   --navy:#09234f; --blue:#384ce3; --teal:#1888a2; --ink:#000; --carbon:#121012; --quiet:#595959;
   --steel:#ced3dc; --sky:#c4f0ff; --rule:#e5e5e5; --mint:#eff5f0; --paper:#fff;

@@ -152,6 +152,19 @@ class PayablesTest(unittest.TestCase):
         self.assertEqual(s["01"], "held")
         self.assertEqual(ap.payments(), [])
 
+    def test_replaying_the_original_never_makes_it_a_duplicate_of_its_copy(self):
+        # 01 is held because the source is down; 04 (the same invoice re-sent) is marked a duplicate of 01
+        fake_run_request.down = True
+        s = self.states()
+        self.assertEqual((s["01"], s["04"]), ("held", "duplicate"))
+        # the source is back; replaying 01 must not match it against its own duplicate
+        fake_run_request.down = False
+        r = ap.recheck("V001:2026-451")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["after"]["invoice_key"], "V001:2026-451")
+        self.assertEqual(r["after"]["state"], "awaiting_approval")
+
 
 if __name__ == "__main__":
     unittest.main()
+
