@@ -213,6 +213,24 @@ FROM_BILL = {"vendor_name_text": "seller.name", "gstin": "seller.gstin", "invoic
              "account_name": "bank.account_holder"}
 
 
+_DOMAIN_RE = re.compile(r"(?:[\w.+-]+@|\bwww\.|\b)((?:[a-z0-9][a-z0-9\-]*\.)+(?:com|in|co\.in|net|org|io|co|biz|info))\b", re.I)
+
+
+def seller_domain(rec):
+    """The one company web domain printed on the bill (a website such as goindigo.in or www.dtdc.com, or the domain of
+    an email such as corporate@goindigo.in), so the background check can look the seller up by domain. Free-mail
+    domains are ignored. If the bill shows more than one company domain, none is used: no guess about which is the seller's."""
+    from .ap import FREE_MAIL
+    found = set()
+    for r in rec.get("rows") or []:
+        for m in _DOMAIN_RE.finditer(r.get("text") or ""):
+            d = m.group(1).lower().strip(".")
+            d = d[4:] if d.startswith("www.") else d
+            if d not in FREE_MAIL and not re.fullmatch(r"[\d.]+", d):
+                found.add(d)
+    return found.pop() if len(found) == 1 else None
+
+
 def _text(rec):
     """The inbox document for a scan: written from the bill read off the photo, one labelled line per field, so the
     invoice checks read exactly what was confirmed (and nothing from stray text such as a browser bar in the photo)."""
@@ -228,6 +246,9 @@ def _text(rec):
     out = [f"Scanned-From: {rec['photo']}", TITLES.get(b["doc_type"], "DOCUMENT")]
     if v("seller.name"):
         out.append(f"Vendor: {v('seller.name')}")
+    dom = seller_domain(rec)
+    if dom:
+        out.append(f"Website: www.{dom}")
     if v("seller.gstin"):
         out.append(f"GSTIN: {v('seller.gstin')}")
     if v("invoice_no"):
@@ -347,6 +368,15 @@ def scan_bytes(data):
     if hit:
         with open(rec_path, encoding="utf-8") as f:
             rec = json.load(f)
+        # the OCR is cached (slow, and the photo has not changed), but the field reader is re-run on the cached lines
+        # (fast, local), so a fix to the reader also applies to a bill that was uploaded before the fix
+        b = bill.parse(rec["lines"], rec.get("size"))
+        bill.review_with_jev(b, f"inv:{name}.txt")
+        rec["bill"] = bill.public(b)
+        sha = _sha(_text(rec).encode())   # the text can change without the fields changing (e.g. the Website line)
+        if sha != rec.get("text_sha"):
+            rec["text_sha"] = sha
+            _write(rec_path, json.dumps(rec).encode())
     else:
         t0 = time.time()
         r = read_image(photo)
