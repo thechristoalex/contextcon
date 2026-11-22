@@ -28,13 +28,13 @@ never repeats a paid API call or a payment.
 
 | Module | LOC | Responsibility |
 |---|---:|---|
-| `ap.py` | 636 | Extraction, vendor identification, 9 invoice checks, scoring, `approve`/`pay`/`resume`/`recheck` |
-| `pipeline.py` | 629 | `Job`: entity resolution, profile, website, registry, GSTIN lookup, adverse media, verdict |
+| `ap.py` | 673 | Extraction, vendor identification, 9 invoice checks, scoring, `approve`/`pay`/`resume`/`recheck` |
+| `pipeline.py` | 636 | `Job`: entity resolution, profile, website, registry, GSTIN lookup, adverse media, verdict |
 | `bill.py` | 1001 | De-skew, row/column reconstruction, labelled-field extraction, arithmetic self-checks, Jev tie-break |
 | `scan.py` | 370 | Photo storage by content hash, OCR backend selection, OCR-error repair, provenance attach |
-| `store.py` | 263 | Schema, connection, checkpoint/cache/ledger/action primitives |
+| `store.py` | 274 | Schema, connection, checkpoint/cache/ledger/action primitives |
 | `bank.py` | 211 | Descriptor normalisation, payee resolution, legal-name extraction, reconciliation |
-| `server.py` | 210 | HTTP routing, single-writer lock, startup recovery |
+| `server.py` | 245 | HTTP routing, single-writer lock, startup recovery |
 | `jev.py` | 177 | Typed-question client, redaction, threshold mapping, sentence-id citations |
 | `crust.py` | 112 | HTTP client with hash cache, credit budget and backoff |
 | `procure/onboarding.py` | 350 | Vendor portal sign-up, submission checks, approval flow, bank-change re-approval |
@@ -70,9 +70,12 @@ These hold for every code path. The tests in `tests/` assert them.
 ## 2. Persistence (`store.py`)
 
 One SQLite file (`data/vendorcheck.db`, override `VENDORCHECK_DB`), `journal_mode=WAL`,
-`isolation_level=None` (autocommit, explicit `BEGIN IMMEDIATE` where atomicity matters), one shared
-connection guarded by a process-wide `threading.RLock` (re-entrant, so a read inside a
-`procure.core.tx()` write on the same thread does not deadlock).
+`isolation_level=None` (autocommit, explicit `BEGIN IMMEDIATE` where atomicity matters). **One connection
+per thread**: WAL lets the HTTP threads read concurrently, and writers are serialised by a process-wide
+`threading.RLock` (re-entrant, so a read inside a `procure.core.tx()` write on the same thread does not
+deadlock) plus SQLite's 30 s busy timeout. A single shared connection would let a reader on one thread run
+inside another thread's open write transaction and see an existing row as missing. Under the Insights
+screen's burst of ~20 parallel reads this is measured at 100/100 correct, and 70/70 with writes mixed in.
 
 | Table | Primary key | Purpose |
 |---|---|---|
@@ -450,7 +453,7 @@ Double payment is blocked at three layers:
 
 ## 9. HTTP surface (`server.py`)
 
-`ThreadingHTTPServer` on `127.0.0.1`. Reads are concurrent (WAL). Every mutating route that runs the
+`ThreadingHTTPServer` on `127.0.0.1`, listen backlog 128. Reads are concurrent (WAL, one connection per thread). Every mutating route that runs the
 pipeline (`/api/process`, `/api/upload`, `/api/scan`, `/api/bank`, `/api/recheck`, `/cases`) takes one
 process-wide `_busy` lock, so pipeline writers are serialised. `/api/procure/*` and `/api/portal/*` are
 dispatched to `procure.api.route` without `_busy`. Their atomicity comes from `tx()` and the
@@ -504,7 +507,7 @@ Startup: open DB → `ap.resume()` → `PayablesService.resume()` → background
 
 ## 11. Testing
 
-`python3 -m unittest discover tests` runs 108 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
+`python3 -m unittest discover tests` runs 109 tests offline. `tests/offline.py` sets `JEV_ENABLED=0` and
 removes `TYPESAFE_API_KEY` before import. Crustdata is replaced by canned responses keyed by endpoint.
 Each test case runs against a fresh `tempfile.mkdtemp()` database and data directory.
 
@@ -513,7 +516,7 @@ Each test case runs against a fresh `tempfile.mkdtemp()` database and data direc
 | `test_bill.py` | 29 | Parser on stored OCR output of real TallyPrime/Vyapar photos and public samples (`data/fixtures/ocr/`) |
 | `test_scan.py` | 23 | Rows, tilt, rupee/GSTIN repair, provenance, legibility; 2 run the real reader on `data/fixtures/bills/` |
 | `test_background.py` | 22 | Unknown-sender checks, PAN types, free mail, GSTIN-only, outage + replay, www fallback |
-| `test_payables.py` | 10 | Every inbox outcome, idempotent re-run, crash-resume, vendor-hash guard, outage hold |
+| `test_payables.py` | 11 | Every inbox outcome, idempotent re-run, crash-resume, vendor-hash guard, outage hold |
 | `test_bank.py` | 9 | Statement end to end, legal-name rules, re-import, one-payment reconciliation, budget |
 | `test_procure.py` | 10 | Onboarding flow and front-company block, shared bank account, invoice-number formats, file re-upload, key replay/misuse, crash after transfer, 6 concurrent payments → 1 recorded, bank change before transfer |
 | `test_website.py` | 5 | Fetch fallback order and human_mode |

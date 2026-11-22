@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css?v=3">
 <link rel="stylesheet" href="/static/procure.css?v=2">
-<script src="/static/procure.js?v=2"></script>
+<script src="/static/procure.js?v=3"></script>
 <style>
 /* full-screen bill scanner: fixed, so it can never open off-screen; sized for phones first */
 .scn{position:fixed;inset:0;z-index:1000;background:#05070d;color:#fff;display:flex;flex-direction:column;
@@ -84,8 +84,9 @@ body.noscroll{overflow:hidden}
 .drop .go{margin-left:auto;display:flex;gap:8px}
 .minor{display:flex;gap:14px;font-size:12px;color:var(--fg-3);margin:0 0 22px}.minor a{cursor:pointer;color:var(--fg-2)}.minor a:hover{color:var(--blue)}
 .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:26px}
-.kc{border:1px solid var(--line);border-radius:8px;padding:14px;cursor:pointer;transition:border-color var(--fast),transform var(--fast)}
-.kc:hover{border-color:var(--fg-3);transform:translateY(-1px)}
+.kc{border:1px solid var(--line);border-radius:8px;padding:14px;transition:border-color var(--fast),transform var(--fast)}
+.kc[data-go]{cursor:pointer}
+.kc[data-go]:hover{border-color:var(--fg-3);transform:translateY(-1px)}  /* only cards that go somewhere look clickable */
 .kc .v{font:500 24px/1.2 var(--sans);margin-top:6px;font-variant-numeric:tabular-nums}.kc .s{font-size:12px;color:var(--fg-3)}
 .today{border-top:1px solid var(--line)}
 .td{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line);cursor:pointer;transition:background var(--fast)}
