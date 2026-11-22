@@ -82,6 +82,10 @@ def first_list(x):
     return []
 
 
+def is_redirect(url):
+    return bool(url) and ("google.com/goto" in url or "google.com/url?" in url)
+
+
 def resolve_redirect(url):
     """Search results come as google.com/goto?url=... links. Follow them to the real page so the citation is the record itself."""
     if not url or "google.com/goto" not in url:
@@ -191,59 +195,85 @@ class Job:
         return {"ok": bool(page.get("success")), "title": page.get("title"), "text": text[:20000], "url": page.get("url") or url, "meta": meta}
 
     # ---------- step 4: registry identifiers from the web ----------
+    # ---------- page verification: never cite a search snippet or a redirect ----------
+    def verify_pages(self, urls, must_terms):
+        """Fetch direct URLs and keep only pages whose text states every required term.
+        Returns {url: passage}. Redirect links (google.com/goto) cannot be fetched or cited and are skipped."""
+        urls = [u for u in dict.fromkeys(urls) if u and not is_redirect(u)][:10]
+        if not urls:
+            return {}
+        resp, meta = crust.call(self.id, "/web/enrich/live", {"urls": urls})
+        out = {}
+        for page in first_list(resp):
+            if not page.get("success"):
+                continue
+            text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page.get("content") or ""))
+            low = text.lower()
+            if all(t.lower() in low for t in must_terms):
+                i = low.find(must_terms[0].lower())
+                out[page.get("url")] = {"passage": text[max(0, i - 120): i + 160].strip(), "retrieved_at": meta["retrieved_at"], "title": page.get("title")}
+        return out
+
     def s_registry(self, legal_name):
-        q = f"\"{legal_name}\" CIN GSTIN"
+        q = f"\"{legal_name}\" CIN"
         resp, meta = crust.call(self.id, "/web/search/live", {"query": q, "location": "IN"})
-        hits = []
+        cands = []
         toks = norm_tokens(legal_name)
         for r in (resp or {}).get("results", [])[:10]:
             blob = f"{r.get('title', '')} {r.get('snippet', '')}"
-            # a search result about another company is not a source for this one
             if not toks or not all(t in blob.lower() for t in toks):
                 continue
             for m in CIN_RE.finditer(blob):
-                hits.append({"kind": "CIN", "value": m.group(0), "title": r.get("title"), "url": r.get("url"), "snippet": r.get("snippet")})
-            for m in GSTIN_RE.finditer(blob):
-                hits.append({"kind": "GSTIN", "value": m.group(1), "title": r.get("title"), "url": r.get("url"), "snippet": r.get("snippet")})
-        for h in hits[:6]:
-            h["url"] = resolve_redirect(h["url"])
-        return {"query": q, "hits": hits, "meta": meta}
+                cands.append({"kind": "CIN", "value": m.group(0), "url": r.get("url")})
+        redirect_only = sum(1 for c in cands if is_redirect(c["url"]))
+        hits = []
+        for c in cands:
+            if is_redirect(c["url"]):
+                continue
+            pages = self.verify_pages([c["url"]], [c["value"]])
+            if pages:
+                url, pg = next(iter(pages.items()))
+                hits.append({**c, "url": url, "passage": pg["passage"], "retrieved_at": pg["retrieved_at"]})
+        return {"query": q, "hits": hits, "candidates": len(cands), "redirect_only": redirect_only, "meta": meta}
 
     def s_gstin_lookup(self, gstin):
         resp, meta = crust.call(self.id, "/web/search/live", {"query": f"\"{gstin}\"", "location": "IN"})
-        res = []
-        for r in (resp or {}).get("results", [])[:8]:
-            blob = f"{r.get('title', '')} {r.get('snippet', '')}"
-            if gstin.upper() in blob.upper():
-                res.append({"title": r.get("title"), "snippet": r.get("snippet"), "url": resolve_redirect(r.get("url"))})
-        return {"results": res, "meta": meta}
+        urls = [r.get("url") for r in (resp or {}).get("results", [])[:8] if gstin.upper() in f"{r.get('title', '')} {r.get('snippet', '')}".upper()]
+        pages = self.verify_pages(urls, [gstin])
+        return {"results": [{"url": u, "passage": p["passage"], "title": p["title"]} for u, p in pages.items()], "meta": meta}
 
     # ---------- step 5: adverse media ----------
     def s_adverse(self, query, must_terms):
         resp, meta = crust.call(self.id, "/web/search/live", {"query": query, "location": "IN"})
-        hits, namesakes = [], []
+        cand, namesakes = [], []
         for r in (resp or {}).get("results", [])[:10]:
             blob = f"{r.get('title', '')} {r.get('snippet', '')}".lower()
             terms = [t for t in ADVERSE_TERMS if re.search(r"\b" + re.escape(t) + r"\b", blob)]
             if not terms:
                 continue
-            item = {"title": r.get("title"), "snippet": r.get("snippet"), "url": r.get("url"), "terms": terms, "date": r.get("metadata")}
-            # namesake clearing: the article must name every required term (person AND company)
             if all(t.lower() in blob for t in must_terms):
-                item["url"] = resolve_redirect(item["url"])
-                hits.append(item)
+                cand.append({"url": r.get("url"), "terms": terms, "title": r.get("title"), "date": r.get("metadata")})
             else:
-                namesakes.append(item)
-        return {"query": query, "hits": hits, "namesakes_cleared": namesakes, "meta": meta}
+                # data minimisation: about a different person, so keep no name, link or passage, only why it was cleared
+                namesakes.append({"terms": terms, "reason": "article does not name the vendor company"})
+        # an escalation needs the article itself, fetched, naming both the person and the company
+        pages = self.verify_pages([c["url"] for c in cand], must_terms)
+        hits, possible = [], []
+        for c in cand:
+            if c["url"] in pages:
+                hits.append({**c, "passage": pages[c["url"]]["passage"], "retrieved_at": pages[c["url"]]["retrieved_at"]})
+            else:
+                possible.append({"terms": c["terms"], "reason": "search result names both, but the article could not be retrieved to confirm"})
+        return {"query": query, "hits": hits, "possible": possible, "namesakes_cleared": namesakes, "meta": meta}
 
     def screening_metrics(self):
         found = cleared = escalated = 0
         for k in ("adverse_company",) + tuple(f"adverse_person_{i}" for i in range(CONFIG["max_people_screened"])):
             st = store.get_step(self.id, k)
             if st:
-                found += len(st["hits"]) + len(st["namesakes_cleared"])
+                found += len(st["hits"]) + len(st.get("possible", [])) + len(st["namesakes_cleared"])
                 cleared += len(st["namesakes_cleared"])
-                escalated += len(st["hits"])
+                escalated += len(st["hits"]) + len(st.get("possible", []))
         return {"hits_found": found, "hits_cleared": cleared, "hits_escalated": escalated}
 
     # ---------------- orchestration ----------------
@@ -391,27 +421,27 @@ class Job:
         vals = sorted({h["value"] for h in cins})
         if len(vals) == 1:
             h = cins[0]
-            # secondary source (a third-party listing), cited as such; not a registry record
-            self.fact("CIN named by a secondary public listing (not the MCA registry)", h["value"],
-                      {"type": "web", "url": h["url"], "field": "search result passage", "passage": h["snippet"], "strength": "secondary"})
+            self.fact("CIN stated on a secondary public listing (not the MCA registry)", h["value"],
+                      {"type": "web", "url": h["url"], "field": "page text", "passage": h["passage"], "strength": "secondary",
+                       "retrieved_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(h["retrieved_at"]))})
             listed = "public" in (bi.get("company_type") or "").lower()
             if listed and h["value"][0] == "U":
-                self.missing.append(f"CIN {h['value']} from a secondary listing is an unlisted-company number but the company is publicly traded; the listing may be stale")
+                self.missing.append(f"CIN {h['value']} on a secondary listing is an unlisted-company number but the company is publicly traded; the listing may be stale")
         elif len(vals) > 1:
-            # group companies share names (e.g. several "TCI" entities); search cannot say which CIN is this vendor's
-            self.missing.append(f"registry not confirmed: secondary listings name {len(vals)} different CINs for similarly named companies ({', '.join(vals[:4])}); MCA lookup needed")
+            self.missing.append(f"registry not confirmed: listings state {len(vals)} different CINs for similarly named companies ({', '.join(vals[:4])}); an MCA lookup is needed")
+        elif reg.get("redirect_only"):
+            self.missing.append(f"registry not confirmed: {reg['redirect_only']} search result(s) mention a CIN, but only through redirect links that cannot be fetched and cited; MCA has no public API")
         else:
-            self.missing.append("no CIN found in public sources (company registry not confirmed)")
+            self.missing.append("registry not confirmed: no fetchable public page states a CIN for this company; MCA has no public API")
         if gstin:
             g = self.step("gstin", lambda: self.s_gstin_lookup(gstin))
             if g["results"]:
                 r0 = g["results"][0]
-                blob = f"{r0['title']} {r0['snippet']}"
-                if any(t in blob.lower() for t in norm_tokens(legal)):
-                    self.fact("GSTIN appears in public records with this company's name", gstin,
-                              {"type": "web", "url": r0["url"], "field": "search snippet", "passage": r0["snippet"]})
+                if any(t in (r0["passage"] or "").lower() for t in norm_tokens(legal)):
+                    self.fact("GSTIN stated on a public page with this company's name", gstin,
+                              {"type": "web", "url": r0["url"], "field": "page text", "passage": r0["passage"]})
                 else:
-                    self.flag("red", f"GSTIN {gstin} appears in public records under a different name", {"type": "web", "url": r0["url"], "passage": r0["snippet"]})
+                    self.flag("red", f"GSTIN {gstin} is stated on a public page under a different name", {"type": "web", "url": r0["url"], "passage": r0["passage"]})
             else:
                 self.missing.append(f"GSTIN {gstin} not found in any public source; GST registration not confirmed")
 
@@ -420,7 +450,10 @@ class Job:
         adv = self.step("adverse_company", lambda: self.s_adverse(f"\"{short}\" raid OR arrested OR FIR OR NCLT OR insolvency OR \"GST evasion\" OR \"money laundering\"", [short.split()[0]]))
         for h in adv["hits"][:3]:
             self.flag("red", f"Adverse media on the company: \"{h['title']}\" ({', '.join(h['terms'])})",
-                      {"type": "web", "url": h["url"], "passage": h["snippet"], "record_date": h.get("date")})
+                      {"type": "web", "url": h["url"], "field": "article text", "passage": h["passage"], "record_date": h.get("date")})
+        if adv.get("possible"):
+            self.flag("amber", f"{len(adv['possible'])} possible adverse result(s) for the company could not be retrieved to confirm; a person should review",
+                      crust.source_ref(adv["meta"], f"web search: {adv['query']}"))
 
         # ---- adverse media: people, clearing namesakes
         # screen the director named on the request first, then the founders / CXOs on record
@@ -434,11 +467,14 @@ class Job:
             a = self.step(f"adverse_person_{i}", lambda l=l: self.s_adverse(f"\"{l['name']}\" arrested OR FIR OR raid OR \"fraud case\" OR \"money laundering\"", [l["name"].split()[-1], short.split()[0]]))
             for h in a["hits"][:2]:
                 self.flag("red", f"Adverse media naming {l['name']} together with {legal}: \"{h['title']}\"",
-                          {"type": "web", "url": h["url"], "passage": h["snippet"], "record_date": h.get("date")})
+                          {"type": "web", "url": h["url"], "field": "article text", "passage": h["passage"], "record_date": h.get("date")})
+            if a.get("possible"):
+                self.flag("amber", f"Possible adverse match for {l['name']}: a result names both the person and {legal}, but the article could not be retrieved to confirm; a person should review",
+                          crust.source_ref(a["meta"], f"web search: {a['query']}"))
             if a["namesakes_cleared"]:
                 self.fact(f"Namesakes cleared for {l['name']}",
-                          f"{len(a['namesakes_cleared'])} adverse article(s) mention someone with this name but not {legal}; not counted",
-                          {"type": "web", "url": a["namesakes_cleared"][0]["url"], "passage": a["namesakes_cleared"][0]["snippet"]})
+                          f"{len(a['namesakes_cleared'])} adverse result(s) concern someone with this name and do not name {legal}; not counted. Their details are not stored.",
+                          crust.source_ref(a["meta"], f"web search: {a['query']}"))
             else:
                 self.fact(f"Adverse media screen: {l['name']}", "no adverse article links this person to the company",
                           crust.source_ref(a["meta"], f"web search: {a['query']}"))
